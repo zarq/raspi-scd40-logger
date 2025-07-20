@@ -1,0 +1,5 @@
+# Maintainer script actions for package upgrades
+# This file handles configuration file management during upgrades
+
+# Preserve configuration files during upgrades
+conffile /etc/sensor-daemon/config.toml

@@ -1,0 +1,10 @@
+sensor-daemon (1.0.0-1) unstable; urgency=medium
+
+  * Initial release
+  * Lightweight C++ daemon for SCD40 sensor data collection
+  * RocksDB-based time-series storage
+  * Python interface for data analysis
+  * Systemd integration with security restrictions
+  * Configurable sampling and retention policies
+
+ -- Sensor Daemon Team <sensor-daemon@example.com>  Sat, 19 Jul 2025 00:00:00 +0000

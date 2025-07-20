@@ -1,0 +1,55 @@
+[Unit]
+Description=Sensor Data Collection Daemon
+Documentation=man:sensor-daemon(8)
+After=network.target
+Wants=network.target
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Service]
+Type=notify
+ExecStart=/usr/bin/sensor-daemon --config /etc/sensor-daemon/config.toml
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=10
+TimeoutStartSec=30
+TimeoutStopSec=30
+
+# Security restrictions
+User=sensor-daemon
+Group=sensor-daemon
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=false
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictNamespaces=true
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+# File system access
+ReadWritePaths=/var/lib/sensor-daemon /var/log/sensor-daemon
+ReadOnlyPaths=/etc/sensor-daemon
+DeviceAllow=/dev/i2c-1 rw
+DevicePolicy=closed
+
+# Resource limits
+LimitNOFILE=1024
+LimitNPROC=32
+MemoryMax=20M
+CPUQuota=10%
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=sensor-daemon
+
+[Install]
+WantedBy=multi-user.target

@@ -6,6 +6,9 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Installation options
+option(INSTALL_SYSTEMD_SERVICE "Install systemd service file" OFF)
+
 # Build type
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
@@ -111,7 +114,24 @@ endif()
 
 # Installation
 install(TARGETS sensor-daemon DESTINATION bin)
-install(FILES config/sensor-daemon.toml DESTINATION /etc/sensor-daemon/ OPTIONAL)
+
+# Install systemd service file if requested
+if(INSTALL_SYSTEMD_SERVICE)
+    install(FILES packaging/systemd/sensor-daemon.service
+        DESTINATION lib/systemd/system
+    )
+endif()
+
+# Install default configuration file as example
+install(FILES config/sensor-daemon-default.toml
+    DESTINATION share/sensor-daemon
+    RENAME config.toml.example
+)
+
+# Install manual page
+install(FILES packaging/debian/sensor-daemon.8
+    DESTINATION share/man/man8
+)
 
 # Testing (optional)
 option(BUILD_TESTS "Build tests" OFF)

@@ -1,0 +1,32 @@
+#!/usr/bin/make -f
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+export DEB_CFLAGS_MAINT_APPEND  = -Wall -pedantic
+export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed
+
+%:
+	dh $@ --with python3 --buildsystem=cmake
+
+override_dh_auto_configure:
+	dh_auto_configure -- \
+		-DCMAKE_BUILD_TYPE=Release \
+		-DCMAKE_INSTALL_PREFIX=/usr \
+		-DBUILD_TESTING=OFF \
+		-DINSTALL_SYSTEMD_SERVICE=ON
+
+override_dh_auto_build:
+	dh_auto_build
+	# Build Python package
+	cd python && python3 setup.py build
+
+override_dh_auto_install:
+	dh_auto_install
+	# Install Python package
+	cd python && python3 setup.py install --root=$(CURDIR)/debian/python3-sensor-daemon --install-layout=deb
+
+override_dh_installsystemd:
+	dh_installsystemd --name=sensor-daemon
+
+override_dh_auto_test:
+	# Skip tests during package build to avoid hardware dependencies
+	@echo "Skipping tests during package build"

@@ -1,0 +1,5 @@
+# Main executable
+usr/bin/sensor-daemon
+
+# Systemd service file
+packaging/systemd/sensor-daemon.service usr/lib/systemd/system/

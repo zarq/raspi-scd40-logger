@@ -1,0 +1,14 @@
+/var/log/sensor-daemon/*.log {
+    daily
+    missingok
+    rotate 7
+    compress
+    delaycompress
+    notifempty
+    create 0644 sensor-daemon sensor-daemon
+    postrotate
+        if systemctl is-active --quiet sensor-daemon.service; then
+            systemctl reload sensor-daemon.service
+        fi
+    endscript
+}

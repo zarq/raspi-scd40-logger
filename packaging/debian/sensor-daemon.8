@@ -1,0 +1,179 @@
+.TH SENSOR-DAEMON 8 "July 2025" "sensor-daemon 1.0.0" "System Administration"
+.SH NAME
+sensor-daemon \- lightweight daemon for SCD40 sensor data collection
+.SH SYNOPSIS
+.B sensor-daemon
+[\fIOPTIONS\fR]
+.SH DESCRIPTION
+.B sensor-daemon
+is a lightweight C++ daemon that continuously reads CO2, temperature, and humidity data from SCD40 sensors over I2C and stores it in an efficient time-series format using RocksDB.
+
+The daemon is designed to be resource-efficient (<10MB RAM) and provides robust I2C communication with retry logic, configurable sampling intervals, and automatic data retention management.
+
+.SH OPTIONS
+.TP
+.BR \-c ", " \-\-config =\fIFILE\fR
+Specify configuration file path (default: /etc/sensor-daemon/config.toml)
+.TP
+.BR \-d ", " \-\-daemon
+Run as daemon (default when started by systemd)
+.TP
+.BR \-f ", " \-\-foreground
+Run in foreground (useful for debugging)
+.TP
+.BR \-t ", " \-\-test\-config
+Test configuration file and exit
+.TP
+.BR \-v ", " \-\-verbose
+Enable verbose logging
+.TP
+.BR \-h ", " \-\-help
+Show help message and exit
+.TP
+.BR \-V ", " \-\-version
+Show version information and exit
+
+.SH FILES
+.TP
+.I /etc/sensor-daemon/config.toml
+Main configuration file
+.TP
+.I /var/lib/sensor-daemon/
+Data storage directory
+.TP
+.I /var/log/sensor-daemon/
+Log file directory
+.TP
+.I /usr/lib/systemd/system/sensor-daemon.service
+Systemd service unit file
+
+.SH CONFIGURATION
+The daemon reads its configuration from a TOML file. Key sections include:
+
+.TP
+.B [daemon]
+General daemon settings including sampling interval, data retention, and log level.
+
+.TP
+.B [sensor]
+I2C sensor configuration including device path, address, and retry settings.
+
+.TP
+.B [storage]
+Database configuration including data directory, compression, and memory settings.
+
+.TP
+.B [logging]
+Logging configuration including log directory, rotation, and syslog settings.
+
+See the default configuration file for detailed parameter descriptions.
+
+.SH SIGNALS
+.TP
+.B SIGTERM, SIGINT
+Graceful shutdown with cleanup
+.TP
+.B SIGHUP
+Reload configuration file
+.TP
+.B SIGUSR1
+Rotate log files
+.TP
+.B SIGUSR2
+Dump runtime statistics to log
+
+.SH SYSTEMD INTEGRATION
+The daemon integrates with systemd and supports:
+.IP \(bu 2
+Service status notifications
+.IP \(bu 2
+Automatic restart on failure
+.IP \(bu 2
+Security restrictions and sandboxing
+.IP \(bu 2
+Resource limits
+.IP \(bu 2
+Journal logging
+
+Common systemd commands:
+.IP \(bu 2
+Start: \fBsystemctl start sensor-daemon\fR
+.IP \(bu 2
+Stop: \fBsystemctl stop sensor-daemon\fR
+.IP \(bu 2
+Status: \fBsystemctl status sensor-daemon\fR
+.IP \(bu 2
+Logs: \fBjournalctl -u sensor-daemon -f\fR
+
+.SH PYTHON INTERFACE
+The \fBpython3-sensor-daemon\fR package provides a Python interface for querying stored sensor data:
+
+.nf
+from sensor_daemon import SensorDataReader
+
+reader = SensorDataReader()
+recent_data = reader.get_recent_readings(100)
+print(recent_data.head())
+.fi
+
+.SH SECURITY
+The daemon runs with restricted privileges:
+.IP \(bu 2
+Dedicated user account (sensor-daemon)
+.IP \(bu 2
+Limited file system access
+.IP \(bu 2
+No network access
+.IP \(bu 2
+Memory and CPU limits
+.IP \(bu 2
+System call filtering
+
+.SH TROUBLESHOOTING
+Common issues and solutions:
+
+.TP
+.B I2C permission denied
+Add sensor-daemon user to i2c group: \fBusermod -a -G i2c sensor-daemon\fR
+
+.TP
+.B Sensor not detected
+Check I2C device path and address in configuration. Use \fBi2cdetect -y 1\fR to scan for devices.
+
+.TP
+.B High memory usage
+Reduce max_memory_cache_mb in configuration or check for data retention issues.
+
+.TP
+.B Database corruption
+Stop daemon, backup data directory, and restart. The database will rebuild if needed.
+
+.SH EXAMPLES
+.TP
+Test configuration:
+.B sensor-daemon --test-config
+
+.TP
+Run in foreground with verbose logging:
+.B sensor-daemon --foreground --verbose
+
+.TP
+Use custom configuration file:
+.B sensor-daemon --config /path/to/custom.toml
+
+.SH SEE ALSO
+.BR systemctl (1),
+.BR journalctl (1),
+.BR i2cdetect (8),
+.BR systemd.service (5)
+
+.SH BUGS
+Report bugs to: https://github.com/example/sensor-daemon/issues
+
+.SH AUTHOR
+Sensor Daemon Team <sensor-daemon@example.com>
+
+.SH COPYRIGHT
+Copyright \(co 2025 Sensor Daemon Team. License MIT.
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.

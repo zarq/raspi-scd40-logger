@@ -1,0 +1,109 @@
+# Sensor Daemon Default Configuration
+# This file contains sensible defaults for typical installations
+# Copy to /etc/sensor-daemon/config.toml and modify as needed
+
+[daemon]
+# Sampling interval in seconds (1-3600)
+# Recommended: 30 seconds for most applications
+sampling_interval_seconds = 30
+
+# Data retention period in days (1-365)
+# Recommended: 365 days (1 year) for long-term analysis
+data_retention_days = 365
+
+# Log level: trace, debug, info, warn, error, critical
+# Recommended: info for production, debug for troubleshooting
+log_level = "info"
+
+# Enable daemon auto-start on boot
+auto_start = true
+
+[sensor]
+# I2C device path - typically /dev/i2c-1 on Raspberry Pi
+i2c_device = "/dev/i2c-1"
+
+# SCD40 I2C address (factory default: 0x62)
+# Only change if you have modified the sensor's address
+i2c_address = 0x62
+
+# Connection timeout in milliseconds
+# Recommended: 1000ms for reliable communication
+connection_timeout_ms = 1000
+
+# Maximum retry attempts for I2C communication failures
+# Recommended: 3 retries with exponential backoff
+max_retries = 3
+
+# Retry delay multiplier for exponential backoff
+# Recommended: 2.0 for balanced retry timing
+retry_delay_multiplier = 2.0
+
+# Sensor warm-up time in seconds after connection
+# SCD40 requires ~10 seconds to stabilize after power-on
+warmup_time_seconds = 10
+
+[storage]
+# Data storage directory
+# Must be writable by sensor-daemon user
+data_directory = "/var/lib/sensor-daemon"
+
+# Enable data compression to save disk space
+# Recommended: true (typically 50-70% space savings)
+compression_enabled = true
+
+# Maximum memory cache size in MB
+# Recommended: 5MB for optimal performance on Raspberry Pi
+max_memory_cache_mb = 5
+
+# Database write buffer size in MB
+# Recommended: 2MB for efficient batching
+write_buffer_size_mb = 2
+
+# Enable periodic data compaction
+# Recommended: true for long-term storage efficiency
+auto_compaction = true
+
+# Compaction trigger threshold (MB)
+# Compact when database size exceeds this value
+compaction_threshold_mb = 100
+
+[logging]
+# Log file directory
+# Must be writable by sensor-daemon user
+log_directory = "/var/log/sensor-daemon"
+
+# Maximum log file size in MB before rotation
+# Recommended: 10MB to balance detail and disk usage
+max_log_size_mb = 10
+
+# Number of rotated log files to keep
+# Recommended: 5 files for adequate history
+max_log_files = 5
+
+# Log to syslog in addition to files
+# Recommended: true for centralized logging
+syslog_enabled = true
+
+# Log performance metrics periodically
+# Recommended: true for monitoring system health
+metrics_logging_enabled = true
+
+# Metrics logging interval in seconds
+metrics_interval_seconds = 300
+
+[alerts]
+# Enable basic alerting for critical conditions
+# Recommended: true for production deployments
+enabled = true
+
+# Alert when sensor communication fails for this many consecutive attempts
+sensor_failure_threshold = 10
+
+# Alert when disk usage exceeds this percentage
+disk_usage_threshold_percent = 90
+
+# Alert when memory usage exceeds this MB
+memory_usage_threshold_mb = 15
+
+# Alert when database write failures exceed this count per hour
+write_failure_threshold_per_hour = 5

@@ -1,0 +1,65 @@
+#!/bin/bash
+set -e
+
+# Post-removal script for sensor-daemon
+
+case "$1" in
+    purge)
+        # Remove configuration files and directories
+        rm -rf /etc/sensor-daemon
+        
+        # Ask user about data preservation
+        echo "The sensor-daemon package has been purged."
+        echo ""
+        echo "Data directory /var/lib/sensor-daemon contains sensor measurements."
+        echo "Log directory /var/log/sensor-daemon contains log files."
+        echo ""
+        read -p "Do you want to remove all data and logs? [y/N]: " -n 1 -r
+        echo
+        
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            rm -rf /var/lib/sensor-daemon
+            rm -rf /var/log/sensor-daemon
+            echo "All sensor data and logs have been removed."
+        else
+            echo "Data and logs preserved in:"
+            echo "  /var/lib/sensor-daemon"
+            echo "  /var/log/sensor-daemon"
+            echo ""
+            echo "You can manually remove these directories later if needed."
+        fi
+        
+        # Remove user and group
+        if getent passwd sensor-daemon >/dev/null 2>&1; then
+            deluser --system sensor-daemon || true
+        fi
+        
+        if getent group sensor-daemon >/dev/null 2>&1; then
+            delgroup --system sensor-daemon || true
+        fi
+        
+        # Reload systemd daemon configuration
+        systemctl daemon-reload || true
+        ;;
+    
+    remove)
+        # On remove (not purge), preserve data but clean up runtime files
+        rm -f /var/run/sensor-daemon/* 2>/dev/null || true
+        
+        echo "Sensor daemon has been removed."
+        echo "Configuration and data have been preserved."
+        echo "Use 'apt purge sensor-daemon' to remove all files."
+        ;;
+    
+    upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
+        ;;
+    
+    *)
+        echo "postrm called with unknown argument \`$1'" >&2
+        exit 1
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

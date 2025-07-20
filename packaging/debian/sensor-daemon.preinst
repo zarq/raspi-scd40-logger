@@ -1,0 +1,39 @@
+#!/bin/bash
+set -e
+
+# Pre-installation script for sensor-daemon
+
+case "$1" in
+    install|upgrade)
+        # Create sensor-daemon user and group if they don't exist
+        if ! getent group sensor-daemon >/dev/null 2>&1; then
+            addgroup --system sensor-daemon
+        fi
+        
+        if ! getent passwd sensor-daemon >/dev/null 2>&1; then
+            adduser --system --ingroup sensor-daemon \
+                    --home /var/lib/sensor-daemon \
+                    --no-create-home \
+                    --gecos "Sensor Daemon" \
+                    --shell /bin/false \
+                    sensor-daemon
+        fi
+        
+        # Add sensor-daemon user to i2c group if it exists
+        if getent group i2c >/dev/null 2>&1; then
+            usermod -a -G i2c sensor-daemon
+        fi
+        ;;
+    
+    abort-upgrade)
+        ;;
+    
+    *)
+        echo "preinst called with unknown argument \`$1'" >&2
+        exit 1
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0
