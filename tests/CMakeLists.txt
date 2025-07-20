@@ -7,6 +7,7 @@ if(GTest_FOUND)
         test_sensor_data.cpp
         test_time_series_storage.cpp
         test_scd40_interface.cpp
+        test_logging_system.cpp
         # Additional test sources will be added in subsequent tasks
         # test_daemon_core.cpp
     )
@@ -39,6 +40,7 @@ if(GTest_FOUND)
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/sensor_data.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/time_series_storage.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/scd40_interface.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/logging_system.cpp
     )
     
     # Register test

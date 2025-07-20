@@ -33,7 +33,9 @@
   - Commit changes to git with message "Add Protocol Buffers schema and data models"
   - _Requirements: 3.1, 3.3, 3.6_
 
-- [-] 4. Implement time-series storage engine (write-only)
+- [x] 4. Implement time-series storage engine (write-only)
+
+
 
 
 
@@ -47,7 +49,12 @@
   - Commit changes to git with message "Implement RocksDB-based time-series storage engine"
   - _Requirements: 3.1, 3.2, 3.4, 3.7, 4.3_
 
-- [ ] 5. Develop I2C sensor interface for SCD40
+- [x] 5. Develop I2C sensor interface for SCD40
+
+
+
+
+
   - Create SCD40Interface class for I2C communication
   - Implement sensor initialization and connection establishment
   - Add read_sensor method to retrieve CO2, temperature, and humidity values
@@ -59,7 +66,10 @@
   - Commit changes to git with message "Add SCD40 I2C sensor interface with error handling"
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7_
 
-- [ ] 6. Create logging system with structured output
+- [-] 6. Create logging system with structured output
+
+
+
   - Implement logging system using spdlog with configurable log levels
   - Add structured logging for daemon lifecycle events (startup, shutdown, errors)
   - Implement log rotation to manage disk space usage
