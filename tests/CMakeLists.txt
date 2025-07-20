@@ -6,9 +6,9 @@ if(GTest_FOUND)
         test_config_manager.cpp
         test_sensor_data.cpp
         test_time_series_storage.cpp
+        test_scd40_interface.cpp
         # Additional test sources will be added in subsequent tasks
         # test_daemon_core.cpp
-        # test_sensor_interface.cpp
     )
     
     # Create test executable
@@ -22,6 +22,8 @@ if(GTest_FOUND)
         ${Protobuf_LIBRARIES}
         GTest::gtest
         GTest::gtest_main
+        GTest::gmock
+        GTest::gmock_main
         Threads::Threads
     )
     
@@ -36,6 +38,7 @@ if(GTest_FOUND)
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/config_manager.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/sensor_data.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/time_series_storage.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/scd40_interface.cpp
     )
     
     # Register test
