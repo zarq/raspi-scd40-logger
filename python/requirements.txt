@@ -1,0 +1,11 @@
+# Core dependencies
+pandas>=1.3.0
+python-rocksdb>=0.8.0
+protobuf>=3.19.0
+
+# Development dependencies (optional)
+pytest>=6.0
+pytest-cov>=2.0
+black>=21.0
+flake8>=3.8
+mypy>=0.910

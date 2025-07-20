@@ -1,0 +1,1 @@
+# Test package for sensor_daemon Python interface
