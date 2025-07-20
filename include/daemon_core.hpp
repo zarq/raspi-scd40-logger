@@ -7,7 +7,10 @@
 #include <string>
 #include <csignal>
 #include <functional>
+#include <unordered_map>
+#ifdef HAVE_SYSTEMD
 #include <systemd/sd-daemon.h>
+#endif
 #include "config_manager.hpp"
 #include "logging_system.hpp"
 #include "scd40_interface.hpp"

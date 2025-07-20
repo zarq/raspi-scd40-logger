@@ -2,7 +2,7 @@
 
 #include <chrono>
 #include <optional>
-#include "proto/sensor_data.pb.h"
+#include "sensor_data.pb.h"
 
 namespace sensor_daemon {
 

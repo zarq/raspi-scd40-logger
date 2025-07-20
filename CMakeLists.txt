@@ -45,7 +45,7 @@ pkg_check_modules(SYSTEMD libsystemd)
 
 # Include directories
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
-include_directories(${CMAKE_CURRENT_BINARY_DIR}/proto)
+include_directories(${CMAKE_CURRENT_BINARY_DIR})
 include_directories(${ROCKSDB_INCLUDE_DIR})
 include_directories(${SPDLOG_INCLUDE_DIR})
 include_directories(${TOML11_INCLUDE_DIR})
@@ -55,12 +55,20 @@ set(PROTO_FILES
     proto/sensor_data.proto
 )
 
+# Generate protobuf C++ files
 protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS ${PROTO_FILES})
+
+# Debug: Print generated files
+message(STATUS "Generated protobuf sources: ${PROTO_SRCS}")
+message(STATUS "Generated protobuf headers: ${PROTO_HDRS}")
 
 # Create proto library
 add_library(sensor_proto ${PROTO_SRCS} ${PROTO_HDRS})
 target_link_libraries(sensor_proto ${Protobuf_LIBRARIES})
-target_include_directories(sensor_proto PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
+target_include_directories(sensor_proto PUBLIC 
+    ${CMAKE_CURRENT_BINARY_DIR}
+    ${Protobuf_INCLUDE_DIRS}
+)
 
 # Main daemon executable
 set(DAEMON_SOURCES
@@ -74,6 +82,15 @@ set(DAEMON_SOURCES
 )
 
 add_executable(sensor-daemon ${DAEMON_SOURCES})
+
+# Ensure main executable can find protobuf headers
+target_include_directories(sensor-daemon PRIVATE 
+    ${CMAKE_CURRENT_BINARY_DIR}
+    ${Protobuf_INCLUDE_DIRS}
+)
+
+# Add explicit dependency on sensor_proto to ensure protobuf files are generated first
+add_dependencies(sensor-daemon sensor_proto)
 
 # Link libraries
 target_link_libraries(sensor-daemon

@@ -527,9 +527,14 @@ void DaemonCore::update_performance_metrics() {
 }
 
 void DaemonCore::notify_systemd(const std::string& status) {
+#ifdef HAVE_SYSTEMD
     if (sd_notify(0, status.c_str()) < 0) {
         LOG_DEBUG("Failed to notify systemd: " + status);
     }
+#else
+    // Systemd not available, silently ignore
+    (void)status; // Suppress unused parameter warning
+#endif
 }
 
 bool DaemonCore::check_system_health() {
