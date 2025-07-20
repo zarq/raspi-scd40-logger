@@ -1,0 +1,19 @@
+# Sensor Daemon Configuration File
+# This is a sample configuration - actual implementation in subsequent tasks
+
+[daemon]
+sampling_interval_seconds = 30
+data_retention_days = 365
+log_level = "info"
+
+[sensor]
+i2c_device = "/dev/i2c-1"
+i2c_address = 0x62
+connection_timeout_ms = 1000
+max_retries = 3
+
+[storage]
+data_directory = "/var/lib/sensor-daemon"
+file_rotation_hours = 24
+compression_enabled = true
+max_memory_cache_mb = 5

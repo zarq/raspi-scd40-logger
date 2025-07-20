@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package sensor_daemon;
+
+// SensorReading message for storing time-series sensor data
+message SensorReading {
+    // Timestamp in microseconds since Unix epoch
+    uint64 timestamp_us = 1;
+    
+    // CO2 concentration in parts per million (ppm)
+    // Optional field to handle missing/invalid readings
+    optional float co2_ppm = 2;
+    
+    // Temperature in degrees Celsius
+    // Optional field to handle missing/invalid readings
+    optional float temperature_c = 3;
+    
+    // Relative humidity as percentage (0-100%)
+    // Optional field to handle missing/invalid readings
+    optional float humidity_percent = 4;
+    
+    // Quality flags for data validation and status
+    // Bit flags: 0x01=CO2_VALID, 0x02=TEMP_VALID, 0x04=HUMIDITY_VALID
+    uint32 quality_flags = 5;
+}
