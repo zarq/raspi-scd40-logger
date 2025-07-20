@@ -8,8 +8,7 @@ if(GTest_FOUND)
         test_time_series_storage.cpp
         test_scd40_interface.cpp
         test_logging_system.cpp
-        # Additional test sources will be added in subsequent tasks
-        # test_daemon_core.cpp
+        test_daemon_core.cpp
     )
     
     # Create test executable
@@ -28,6 +27,13 @@ if(GTest_FOUND)
         Threads::Threads
     )
     
+    # Add systemd support if available
+    if(SYSTEMD_FOUND)
+        target_compile_definitions(sensor_daemon_tests PRIVATE HAVE_SYSTEMD)
+        target_link_libraries(sensor_daemon_tests ${SYSTEMD_LIBRARIES})
+        target_include_directories(sensor_daemon_tests PRIVATE ${SYSTEMD_INCLUDE_DIRS})
+    endif()
+    
     # Include directories for tests
     target_include_directories(sensor_daemon_tests PRIVATE 
         ${CMAKE_CURRENT_SOURCE_DIR}/../include
@@ -41,6 +47,7 @@ if(GTest_FOUND)
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/time_series_storage.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/scd40_interface.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/logging_system.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/daemon_core.cpp
     )
     
     # Register test

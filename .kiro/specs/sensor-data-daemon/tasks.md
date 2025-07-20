@@ -66,7 +66,9 @@
   - Commit changes to git with message "Add SCD40 I2C sensor interface with error handling"
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7_
 
-- [-] 6. Create logging system with structured output
+- [x] 6. Create logging system with structured output
+
+
 
 
 
@@ -80,7 +82,10 @@
   - Commit changes to git with message "Implement structured logging system with rotation"
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5_
 
-- [ ] 7. Implement daemon core and process management
+- [-] 7. Implement daemon core and process management
+
+
+
   - Create DaemonCore class with proper daemonization process
   - Implement signal handling for graceful shutdown (SIGTERM, SIGINT)
   - Add main event loop with configurable sampling intervals

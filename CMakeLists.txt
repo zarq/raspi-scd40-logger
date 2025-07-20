@@ -70,7 +70,7 @@ set(DAEMON_SOURCES
     src/time_series_storage.cpp
     src/scd40_interface.cpp
     src/logging_system.cpp
-    # Additional source files will be added in subsequent tasks
+    src/daemon_core.cpp
 )
 
 add_executable(sensor-daemon ${DAEMON_SOURCES})
