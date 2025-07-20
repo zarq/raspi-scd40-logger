@@ -29,7 +29,7 @@ public:
      * Constructor
      * @param config Sensor configuration containing I2C parameters
      */
-    explicit SCD40Interface(const DaemonConfig::sensor& config);
+    explicit SCD40Interface(const DaemonConfig::SensorSettings& config);
     
     /**
      * Destructor - ensures proper cleanup
@@ -44,10 +44,10 @@ public:
     
     /**
      * Read sensor data (CO2, temperature, humidity)
-     * @return SensorReading with timestamp and sensor values
+     * @return SensorData with timestamp and sensor values
      * @throws I2CError if communication fails after all retries
      */
-    SensorReading read_sensor();
+    SensorData read_sensor();
     
     /**
      * Check if sensor is currently connected
@@ -76,7 +76,7 @@ public:
 
 private:
     // Configuration
-    const DaemonConfig::sensor config_;
+    const DaemonConfig::SensorSettings config_;
     
     // I2C file descriptor
     int i2c_fd_;
@@ -183,17 +183,17 @@ private:
      * @param raw_co2 Raw CO2 value from sensor
      * @param raw_temp Raw temperature value from sensor
      * @param raw_humidity Raw humidity value from sensor
-     * @param reading Output SensorReading structure
+     * @param reading Output SensorData structure
      */
     void convert_raw_values(uint16_t raw_co2, uint16_t raw_temp, uint16_t raw_humidity, 
-                           SensorReading& reading);
+                           SensorData& reading);
     
     /**
      * Validate sensor reading values
-     * @param reading SensorReading to validate
+     * @param reading SensorData to validate
      * @return true if all present values are within valid ranges
      */
-    bool validate_reading(const SensorReading& reading);
+    bool validate_reading(const SensorData& reading);
     
     /**
      * Attempt to reconnect to sensor with exponential backoff

@@ -10,7 +10,7 @@ namespace sensor_daemon {
  * Internal C++ representation of sensor data with optional fields for missing values
  * This struct is used throughout the application for type safety and convenience
  */
-struct SensorReading {
+struct SensorData {
     std::chrono::system_clock::time_point timestamp;
     std::optional<float> co2_ppm;
     std::optional<float> temperature_c;
@@ -25,10 +25,10 @@ struct SensorReading {
     uint32_t quality_flags = 0;
     
     // Default constructor
-    SensorReading() = default;
+    SensorData() = default;
     
     // Constructor with timestamp
-    explicit SensorReading(std::chrono::system_clock::time_point ts) 
+    explicit SensorData(std::chrono::system_clock::time_point ts) 
         : timestamp(ts) {}
     
     // Convenience methods for quality flags
@@ -58,32 +58,32 @@ struct SensorReading {
 class SensorDataConverter {
 public:
     /**
-     * Convert internal SensorReading struct to protobuf message
-     * @param reading Internal sensor reading struct
+     * Convert internal SensorData struct to protobuf message
+     * @param reading Internal sensor data struct
      * @return Protobuf message ready for serialization
      */
-    static sensor_daemon::SensorReading to_protobuf(const SensorReading& reading);
+    static sensor_daemon::SensorReading to_protobuf(const SensorData& reading);
     
     /**
-     * Convert protobuf message to internal SensorReading struct
+     * Convert protobuf message to internal SensorData struct
      * @param proto_reading Protobuf message from deserialization
-     * @return Internal sensor reading struct
+     * @return Internal sensor data struct
      */
-    static SensorReading from_protobuf(const sensor_daemon::SensorReading& proto_reading);
+    static SensorData from_protobuf(const sensor_daemon::SensorReading& proto_reading);
     
     /**
-     * Serialize internal SensorReading to binary string
-     * @param reading Internal sensor reading struct
+     * Serialize internal SensorData to binary string
+     * @param reading Internal sensor data struct
      * @return Serialized binary data
      */
-    static std::string serialize(const SensorReading& reading);
+    static std::string serialize(const SensorData& reading);
     
     /**
-     * Deserialize binary string to internal SensorReading
+     * Deserialize binary string to internal SensorData
      * @param data Serialized binary data
-     * @return Internal sensor reading struct, or nullopt if deserialization fails
+     * @return Internal sensor data struct, or nullopt if deserialization fails
      */
-    static std::optional<SensorReading> deserialize(const std::string& data);
+    static std::optional<SensorData> deserialize(const std::string& data);
 };
 
 } // namespace sensor_daemon

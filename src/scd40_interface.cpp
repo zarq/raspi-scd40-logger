@@ -10,7 +10,7 @@
 
 namespace sensor_daemon {
 
-SCD40Interface::SCD40Interface(const DaemonConfig::sensor& config)
+SCD40Interface::SCD40Interface(const DaemonConfig::SensorSettings& config)
     : config_(config), i2c_fd_(-1), is_connected_(false) {
 }
 
@@ -67,8 +67,8 @@ bool SCD40Interface::initialize() {
     return true;
 }
 
-SensorReading SCD40Interface::read_sensor() {
-    SensorReading reading(std::chrono::system_clock::now());
+SensorData SCD40Interface::read_sensor() {
+    SensorData reading(std::chrono::system_clock::now());
     
     // Check if connected
     if (!is_connected_.load()) {
@@ -264,7 +264,7 @@ uint8_t SCD40Interface::calculate_crc8(const uint8_t* data, size_t length) {
 }
 
 void SCD40Interface::convert_raw_values(uint16_t raw_co2, uint16_t raw_temp, uint16_t raw_humidity,
-                                       SensorReading& reading) {
+                                       SensorData& reading) {
     // Convert CO2 (ppm) - direct value
     if (raw_co2 != 0) {
         reading.co2_ppm = static_cast<float>(raw_co2);
@@ -284,7 +284,7 @@ void SCD40Interface::convert_raw_values(uint16_t raw_co2, uint16_t raw_temp, uin
     }
 }
 
-bool SCD40Interface::validate_reading(const SensorReading& reading) {
+bool SCD40Interface::validate_reading(const SensorData& reading) {
     bool valid = true;
     
     // Validate CO2 if present

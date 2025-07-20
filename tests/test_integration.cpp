@@ -80,14 +80,14 @@ TEST_F(IntegrationTest, ComponentIntegrationTest) {
     // This is expected and tests error handling
     
     // Test data flow: create a mock sensor reading and store it
-    SensorReading test_reading;
+    SensorData test_reading;
     test_reading.timestamp = std::chrono::system_clock::now();
     test_reading.co2_ppm = 450.0f;
     test_reading.temperature_c = 22.5f;
     test_reading.humidity_percent = 45.0f;
-    test_reading.quality_flags = SensorReading::CO2_VALID | 
-                                SensorReading::TEMP_VALID | 
-                                SensorReading::HUMIDITY_VALID;
+    test_reading.quality_flags = SensorData::CO2_VALID | 
+                                SensorData::TEMP_VALID | 
+                                SensorData::HUMIDITY_VALID;
     
     EXPECT_TRUE(storage.store_reading(test_reading));
     
@@ -164,32 +164,32 @@ TEST_F(IntegrationTest, DataIntegrityTest) {
     ASSERT_TRUE(storage.initialize(config.storage.data_directory, config.daemon.data_retention));
     
     // Create multiple test readings with different data patterns
-    std::vector<SensorReading> test_readings;
+    std::vector<SensorData> test_readings;
     
     // Reading with all values
-    SensorReading reading1;
+    SensorData reading1;
     reading1.timestamp = std::chrono::system_clock::now();
     reading1.co2_ppm = 400.0f;
     reading1.temperature_c = 20.0f;
     reading1.humidity_percent = 50.0f;
-    reading1.quality_flags = SensorReading::CO2_VALID | 
-                            SensorReading::TEMP_VALID | 
-                            SensorReading::HUMIDITY_VALID;
+    reading1.quality_flags = SensorData::CO2_VALID | 
+                            SensorData::TEMP_VALID | 
+                            SensorData::HUMIDITY_VALID;
     test_readings.push_back(reading1);
     
     // Reading with missing CO2
-    SensorReading reading2;
+    SensorData reading2;
     reading2.timestamp = std::chrono::system_clock::now() + std::chrono::seconds(1);
     reading2.temperature_c = 21.0f;
     reading2.humidity_percent = 51.0f;
-    reading2.quality_flags = SensorReading::TEMP_VALID | SensorReading::HUMIDITY_VALID;
+    reading2.quality_flags = SensorData::TEMP_VALID | SensorData::HUMIDITY_VALID;
     test_readings.push_back(reading2);
     
     // Reading with only CO2
-    SensorReading reading3;
+    SensorData reading3;
     reading3.timestamp = std::chrono::system_clock::now() + std::chrono::seconds(2);
     reading3.co2_ppm = 450.0f;
-    reading3.quality_flags = SensorReading::CO2_VALID;
+    reading3.quality_flags = SensorData::CO2_VALID;
     test_readings.push_back(reading3);
     
     // Store all readings
@@ -268,18 +268,18 @@ TEST_F(IntegrationTest, EndToEndDataFlowTest) {
     // Sensor initialization may fail without hardware - that's expected
     
     // Test data flow with mock sensor readings
-    std::vector<SensorReading> test_readings;
+    std::vector<SensorData> test_readings;
     auto base_time = std::chrono::system_clock::now();
     
     for (int i = 0; i < 5; ++i) {
-        SensorReading reading;
+        SensorData reading;
         reading.timestamp = base_time + std::chrono::seconds(i);
         reading.co2_ppm = 400.0f + i * 10.0f;
         reading.temperature_c = 20.0f + i * 0.5f;
         reading.humidity_percent = 50.0f + i * 2.0f;
-        reading.quality_flags = SensorReading::CO2_VALID | 
-                               SensorReading::TEMP_VALID | 
-                               SensorReading::HUMIDITY_VALID;
+        reading.quality_flags = SensorData::CO2_VALID | 
+                               SensorData::TEMP_VALID | 
+                               SensorData::HUMIDITY_VALID;
         test_readings.push_back(reading);
     }
     

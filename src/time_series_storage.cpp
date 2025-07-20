@@ -64,7 +64,7 @@ bool TimeSeriesStorage::initialize(const std::string& data_directory,
     return true;
 }
 
-bool TimeSeriesStorage::store_reading(const SensorReading& reading) {
+bool TimeSeriesStorage::store_reading(const SensorData& reading) {
     if (!db_) {
         std::cerr << "Storage engine not initialized" << std::endl;
         return false;

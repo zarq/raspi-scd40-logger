@@ -46,7 +46,7 @@ public:
      * @param reading Sensor reading to store
      * @return true if storage successful, false otherwise
      */
-    bool store_reading(const SensorReading& reading);
+    bool store_reading(const SensorData& reading);
     
     /**
      * Check if the storage engine is healthy and operational

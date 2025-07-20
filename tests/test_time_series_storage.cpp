@@ -52,14 +52,14 @@ TEST_F(TimeSeriesStorageTest, StoreReadingSuccess) {
     ASSERT_TRUE(storage.initialize(test_db_path_.string()));
     
     // Create test sensor reading
-    SensorReading reading;
+    SensorData reading;
     reading.timestamp = std::chrono::system_clock::now();
     reading.co2_ppm = 450.5f;
     reading.temperature_c = 22.3f;
     reading.humidity_percent = 65.2f;
-    reading.quality_flags = SensorReading::CO2_VALID | 
-                           SensorReading::TEMP_VALID | 
-                           SensorReading::HUMIDITY_VALID;
+    reading.quality_flags = SensorData::CO2_VALID | 
+                           SensorData::TEMP_VALID | 
+                           SensorData::HUMIDITY_VALID;
     
     EXPECT_TRUE(storage.store_reading(reading));
 }
@@ -69,11 +69,11 @@ TEST_F(TimeSeriesStorageTest, StoreReadingWithMissingValues) {
     ASSERT_TRUE(storage.initialize(test_db_path_.string()));
     
     // Create test sensor reading with some missing values
-    SensorReading reading;
+    SensorData reading;
     reading.timestamp = std::chrono::system_clock::now();
     reading.co2_ppm = 450.5f;  // Only CO2 is valid
     // temperature_c and humidity_percent are not set (optional fields)
-    reading.quality_flags = SensorReading::CO2_VALID;
+    reading.quality_flags = SensorData::CO2_VALID;
     
     EXPECT_TRUE(storage.store_reading(reading));
 }
@@ -86,14 +86,14 @@ TEST_F(TimeSeriesStorageTest, StoreMultipleReadings) {
     
     // Store multiple readings with different timestamps
     for (int i = 0; i < 10; ++i) {
-        SensorReading reading;
+        SensorData reading;
         reading.timestamp = base_time + std::chrono::seconds(i * 30);  // 30 second intervals
         reading.co2_ppm = 400.0f + i * 10.0f;  // Varying CO2 values
         reading.temperature_c = 20.0f + i * 0.5f;  // Varying temperature
         reading.humidity_percent = 50.0f + i * 2.0f;  // Varying humidity
-        reading.quality_flags = SensorReading::CO2_VALID | 
-                               SensorReading::TEMP_VALID | 
-                               SensorReading::HUMIDITY_VALID;
+        reading.quality_flags = SensorData::CO2_VALID | 
+                               SensorData::TEMP_VALID | 
+                               SensorData::HUMIDITY_VALID;
         
         EXPECT_TRUE(storage.store_reading(reading));
     }
@@ -105,7 +105,7 @@ TEST_F(TimeSeriesStorageTest, StoreReadingUninitializedStorage) {
     TimeSeriesStorage storage;
     // Don't initialize storage
     
-    SensorReading reading;
+    SensorData reading;
     reading.timestamp = std::chrono::system_clock::now();
     reading.co2_ppm = 450.5f;
     
@@ -122,14 +122,14 @@ TEST_F(TimeSeriesStorageTest, DatabaseSizeTracking) {
     // Store some readings
     auto base_time = std::chrono::system_clock::now();
     for (int i = 0; i < 5; ++i) {
-        SensorReading reading;
+        SensorData reading;
         reading.timestamp = base_time + std::chrono::seconds(i);
         reading.co2_ppm = 400.0f + i;
         reading.temperature_c = 20.0f + i;
         reading.humidity_percent = 50.0f + i;
-        reading.quality_flags = SensorReading::CO2_VALID | 
-                               SensorReading::TEMP_VALID | 
-                               SensorReading::HUMIDITY_VALID;
+        reading.quality_flags = SensorData::CO2_VALID | 
+                               SensorData::TEMP_VALID | 
+                               SensorData::HUMIDITY_VALID;
         
         ASSERT_TRUE(storage.store_reading(reading));
     }
@@ -164,10 +164,10 @@ TEST_F(TimeSeriesStorageTest, CleanupOldData) {
     // Store some readings
     auto base_time = std::chrono::system_clock::now();
     for (int i = 0; i < 3; ++i) {
-        SensorReading reading;
+        SensorData reading;
         reading.timestamp = base_time + std::chrono::seconds(i);
         reading.co2_ppm = 400.0f + i;
-        reading.quality_flags = SensorReading::CO2_VALID;
+        reading.quality_flags = SensorData::CO2_VALID;
         
         ASSERT_TRUE(storage.store_reading(reading));
     }
@@ -185,10 +185,10 @@ TEST_F(TimeSeriesStorageTest, TimestampKeyConversion) {
     auto now = std::chrono::system_clock::now();
     
     // Store reading with specific timestamp
-    SensorReading reading;
+    SensorData reading;
     reading.timestamp = now;
     reading.co2_ppm = 400.0f;
-    reading.quality_flags = SensorReading::CO2_VALID;
+    reading.quality_flags = SensorData::CO2_VALID;
     
     EXPECT_TRUE(storage.store_reading(reading));
     
@@ -211,14 +211,14 @@ TEST_F(TimeSeriesStorageTest, HighFrequencyWrites) {
     
     // Store readings at high frequency (every 100ms)
     for (int i = 0; i < 50; ++i) {
-        SensorReading reading;
+        SensorData reading;
         reading.timestamp = base_time + std::chrono::milliseconds(i * 100);
         reading.co2_ppm = 400.0f + (i % 10);  // Cycling values
         reading.temperature_c = 20.0f + (i % 5);
         reading.humidity_percent = 50.0f + (i % 8);
-        reading.quality_flags = SensorReading::CO2_VALID | 
-                               SensorReading::TEMP_VALID | 
-                               SensorReading::HUMIDITY_VALID;
+        reading.quality_flags = SensorData::CO2_VALID | 
+                               SensorData::TEMP_VALID | 
+                               SensorData::HUMIDITY_VALID;
         
         EXPECT_TRUE(storage.store_reading(reading));
     }
@@ -231,10 +231,10 @@ TEST_F(TimeSeriesStorageTest, MoveSemantics) {
     ASSERT_TRUE(storage1.initialize(test_db_path_.string()));
     
     // Store a reading
-    SensorReading reading;
+    SensorData reading;
     reading.timestamp = std::chrono::system_clock::now();
     reading.co2_ppm = 400.0f;
-    reading.quality_flags = SensorReading::CO2_VALID;
+    reading.quality_flags = SensorData::CO2_VALID;
     
     ASSERT_TRUE(storage1.store_reading(reading));
     ASSERT_TRUE(storage1.is_healthy());
@@ -259,10 +259,10 @@ TEST_F(TimeSeriesStorageTest, TTLConfiguration) {
     ASSERT_TRUE(storage.initialize(test_db_path_.string(), short_retention));
     
     // Store a reading
-    SensorReading reading;
+    SensorData reading;
     reading.timestamp = std::chrono::system_clock::now();
     reading.co2_ppm = 400.0f;
-    reading.quality_flags = SensorReading::CO2_VALID;
+    reading.quality_flags = SensorData::CO2_VALID;
     
     EXPECT_TRUE(storage.store_reading(reading));
     EXPECT_TRUE(storage.is_healthy());
@@ -281,14 +281,14 @@ TEST_F(TimeSeriesStorageTest, PerformanceBaseline) {
     // Store 100 readings
     auto base_time = std::chrono::system_clock::now();
     for (int i = 0; i < 100; ++i) {
-        SensorReading reading;
+        SensorData reading;
         reading.timestamp = base_time + std::chrono::seconds(i);
         reading.co2_ppm = 400.0f + i;
         reading.temperature_c = 20.0f + i * 0.1f;
         reading.humidity_percent = 50.0f + i * 0.2f;
-        reading.quality_flags = SensorReading::CO2_VALID | 
-                               SensorReading::TEMP_VALID | 
-                               SensorReading::HUMIDITY_VALID;
+        reading.quality_flags = SensorData::CO2_VALID | 
+                               SensorData::TEMP_VALID | 
+                               SensorData::HUMIDITY_VALID;
         
         ASSERT_TRUE(storage.store_reading(reading));
     }

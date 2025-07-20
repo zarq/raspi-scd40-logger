@@ -354,7 +354,7 @@ bool DaemonCore::perform_sensor_cycle() {
         }
         
         // Read sensor data
-        SensorReading reading = sensor_interface_->read_sensor();
+        SensorData reading = sensor_interface_->read_sensor();
         
         // Validate reading has at least one valid measurement
         bool has_valid_data = reading.co2_ppm.has_value() || 

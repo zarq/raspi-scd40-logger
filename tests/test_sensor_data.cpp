@@ -15,20 +15,20 @@ protected:
         complete_reading.co2_ppm = 450.5f;
         complete_reading.temperature_c = 23.2f;
         complete_reading.humidity_percent = 65.8f;
-        complete_reading.quality_flags = SensorReading::CO2_VALID | 
-                                       SensorReading::TEMP_VALID | 
-                                       SensorReading::HUMIDITY_VALID;
+        complete_reading.quality_flags = SensorData::CO2_VALID | 
+                                       SensorData::TEMP_VALID | 
+                                       SensorData::HUMIDITY_VALID;
         
         // Create a partial sensor reading (missing some values)
         partial_reading.timestamp = test_timestamp;
         partial_reading.co2_ppm = 420.0f;
         // temperature_c and humidity_percent are not set (std::nullopt)
-        partial_reading.quality_flags = SensorReading::CO2_VALID;
+        partial_reading.quality_flags = SensorData::CO2_VALID;
     }
     
     std::chrono::system_clock::time_point test_timestamp;
-    SensorReading complete_reading;
-    SensorReading partial_reading;
+    SensorData complete_reading;
+    SensorData partial_reading;
 };
 
 // Test conversion from internal struct to protobuf
@@ -52,7 +52,7 @@ TEST_F(SensorDataTest, ToProtobufComplete) {
     
     // Check quality flags
     EXPECT_EQ(proto_reading.quality_flags(), 
-              SensorReading::CO2_VALID | SensorReading::TEMP_VALID | SensorReading::HUMIDITY_VALID);
+              SensorData::CO2_VALID | SensorData::TEMP_VALID | SensorData::HUMIDITY_VALID);
 }
 
 // Test conversion from internal struct to protobuf with missing values
@@ -73,7 +73,7 @@ TEST_F(SensorDataTest, ToProtobufPartial) {
     EXPECT_FALSE(proto_reading.has_humidity_percent());
     
     // Check quality flags
-    EXPECT_EQ(proto_reading.quality_flags(), SensorReading::CO2_VALID);
+    EXPECT_EQ(proto_reading.quality_flags(), SensorData::CO2_VALID);
 }
 
 // Test conversion from protobuf to internal struct
@@ -121,7 +121,7 @@ TEST_F(SensorDataTest, FromProtobufPartial) {
     EXPECT_FALSE(converted_reading.humidity_percent.has_value());
     
     // Check quality flags
-    EXPECT_EQ(converted_reading.quality_flags, SensorReading::CO2_VALID);
+    EXPECT_EQ(converted_reading.quality_flags, SensorData::CO2_VALID);
 }
 
 // Test serialization and deserialization
@@ -165,7 +165,7 @@ TEST_F(SensorDataTest, SerializeDeserializePartial) {
     EXPECT_FLOAT_EQ(reading.co2_ppm.value(), 420.0f);
     EXPECT_FALSE(reading.temperature_c.has_value());
     EXPECT_FALSE(reading.humidity_percent.has_value());
-    EXPECT_EQ(reading.quality_flags, SensorReading::CO2_VALID);
+    EXPECT_EQ(reading.quality_flags, SensorData::CO2_VALID);
 }
 
 // Test deserialization failure with invalid data
@@ -177,7 +177,7 @@ TEST_F(SensorDataTest, DeserializeInvalidData) {
 
 // Test quality flag convenience methods
 TEST_F(SensorDataTest, QualityFlagMethods) {
-    SensorReading reading;
+    SensorData reading;
     
     // Initially no flags set
     EXPECT_FALSE(reading.is_co2_valid());
@@ -189,14 +189,14 @@ TEST_F(SensorDataTest, QualityFlagMethods) {
     EXPECT_TRUE(reading.is_co2_valid());
     EXPECT_FALSE(reading.is_temperature_valid());
     EXPECT_FALSE(reading.is_humidity_valid());
-    EXPECT_EQ(reading.quality_flags, SensorReading::CO2_VALID);
+    EXPECT_EQ(reading.quality_flags, SensorData::CO2_VALID);
     
     // Set temperature valid
     reading.set_temperature_valid(true);
     EXPECT_TRUE(reading.is_co2_valid());
     EXPECT_TRUE(reading.is_temperature_valid());
     EXPECT_FALSE(reading.is_humidity_valid());
-    EXPECT_EQ(reading.quality_flags, SensorReading::CO2_VALID | SensorReading::TEMP_VALID);
+    EXPECT_EQ(reading.quality_flags, SensorData::CO2_VALID | SensorData::TEMP_VALID);
     
     // Set humidity valid
     reading.set_humidity_valid(true);
@@ -204,23 +204,23 @@ TEST_F(SensorDataTest, QualityFlagMethods) {
     EXPECT_TRUE(reading.is_temperature_valid());
     EXPECT_TRUE(reading.is_humidity_valid());
     EXPECT_EQ(reading.quality_flags, 
-              SensorReading::CO2_VALID | SensorReading::TEMP_VALID | SensorReading::HUMIDITY_VALID);
+              SensorData::CO2_VALID | SensorData::TEMP_VALID | SensorData::HUMIDITY_VALID);
     
     // Unset CO2 valid
     reading.set_co2_valid(false);
     EXPECT_FALSE(reading.is_co2_valid());
     EXPECT_TRUE(reading.is_temperature_valid());
     EXPECT_TRUE(reading.is_humidity_valid());
-    EXPECT_EQ(reading.quality_flags, SensorReading::TEMP_VALID | SensorReading::HUMIDITY_VALID);
+    EXPECT_EQ(reading.quality_flags, SensorData::TEMP_VALID | SensorData::HUMIDITY_VALID);
 }
 
 // Test timestamp precision
 TEST_F(SensorDataTest, TimestampPrecision) {
     // Create a reading with a specific timestamp
     auto now = std::chrono::system_clock::now();
-    SensorReading reading(now);
+    SensorData reading(now);
     reading.co2_ppm = 400.0f;
-    reading.quality_flags = SensorReading::CO2_VALID;
+    reading.quality_flags = SensorData::CO2_VALID;
     
     // Serialize and deserialize
     std::string serialized = SensorDataConverter::serialize(reading);

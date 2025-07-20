@@ -12,20 +12,20 @@ namespace sensor_daemon {
  * Configuration structure containing all daemon settings
  */
 struct DaemonConfig {
-    struct {
+    struct DaemonSettings {
         std::chrono::seconds sampling_interval{30};
         std::chrono::hours data_retention{24 * 365};
         std::string log_level{"info"};
     } daemon;
     
-    struct {
+    struct SensorSettings {
         std::string i2c_device{"/dev/i2c-1"};
         uint8_t i2c_address{0x62};
         std::chrono::milliseconds connection_timeout{1000};
         int max_retries{3};
     } sensor;
     
-    struct {
+    struct StorageSettings {
         std::string data_directory{"/var/lib/sensor-daemon"};
         std::chrono::hours file_rotation{24};
         bool compression_enabled{true};

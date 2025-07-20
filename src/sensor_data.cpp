@@ -3,7 +3,7 @@
 
 namespace sensor_daemon {
 
-sensor_daemon::SensorReading SensorDataConverter::to_protobuf(const SensorReading& reading) {
+sensor_daemon::SensorReading SensorDataConverter::to_protobuf(const SensorData& reading) {
     sensor_daemon::SensorReading proto_reading;
     
     // Convert timestamp to microseconds since Unix epoch
@@ -30,8 +30,8 @@ sensor_daemon::SensorReading SensorDataConverter::to_protobuf(const SensorReadin
     return proto_reading;
 }
 
-SensorReading SensorDataConverter::from_protobuf(const sensor_daemon::SensorReading& proto_reading) {
-    SensorReading reading;
+SensorData SensorDataConverter::from_protobuf(const sensor_daemon::SensorReading& proto_reading) {
+    SensorData reading;
     
     // Convert timestamp from microseconds since Unix epoch
     auto microseconds = std::chrono::microseconds(proto_reading.timestamp_us());
@@ -56,7 +56,7 @@ SensorReading SensorDataConverter::from_protobuf(const sensor_daemon::SensorRead
     return reading;
 }
 
-std::string SensorDataConverter::serialize(const SensorReading& reading) {
+std::string SensorDataConverter::serialize(const SensorData& reading) {
     auto proto_reading = to_protobuf(reading);
     std::string serialized_data;
     
@@ -67,7 +67,7 @@ std::string SensorDataConverter::serialize(const SensorReading& reading) {
     return serialized_data;
 }
 
-std::optional<SensorReading> SensorDataConverter::deserialize(const std::string& data) {
+std::optional<SensorData> SensorDataConverter::deserialize(const std::string& data) {
     sensor_daemon::SensorReading proto_reading;
     
     if (!proto_reading.ParseFromString(data)) {
