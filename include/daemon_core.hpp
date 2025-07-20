@@ -92,9 +92,10 @@ public:
     /**
      * Initialize the daemon with configuration
      * @param config_path Path to configuration file
+     * @param foreground Whether to run in foreground (don't daemonize)
      * @return true if initialization successful
      */
-    bool initialize(const std::string& config_path);
+    bool initialize(const std::string& config_path, bool foreground = false);
     
     /**
      * Run the main daemon loop
@@ -130,6 +131,7 @@ private:
     std::atomic<bool> running_;
     std::atomic<bool> shutdown_requested_;
     std::thread main_thread_;
+    bool foreground_mode_;
     
     // Performance tracking
     PerformanceMetrics metrics_;

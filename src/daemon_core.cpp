@@ -10,6 +10,8 @@
 #include <fstream>
 #include <sstream>
 #include <algorithm>
+#include <thread>
+#include <csignal>
 
 namespace sensor_daemon {
 
@@ -75,7 +77,8 @@ DaemonCore::DaemonCore()
     : running_(false)
     , shutdown_requested_(false)
     , error_handler_(std::make_unique<ErrorHandler>())
-    , last_metrics_log_(std::chrono::steady_clock::now()) {
+    , last_metrics_log_(std::chrono::steady_clock::now())
+    , foreground_mode_(false) {
     
     instance_ = this;
     metrics_.start_time = std::chrono::steady_clock::now();
@@ -89,19 +92,26 @@ DaemonCore::~DaemonCore() {
     instance_ = nullptr;
 }
 
-bool DaemonCore::initialize(const std::string& config_path) {
+bool DaemonCore::initialize(const std::string& config_path, bool foreground) {
     try {
+        // Store foreground mode
+        foreground_mode_ = foreground;
+        
         // Load configuration
         config_ = ConfigManager::load_config(config_path);
         
         // Initialize logging system
         LogLevel log_level = LoggingSystem::string_to_log_level(config_.daemon.log_level);
-        if (!LoggingSystem::initialize(log_level, "/var/log/sensor-daemon/daemon.log")) {
+        std::string log_file = foreground_mode_ ? "" : "/var/log/sensor-daemon/daemon.log";
+        if (!LoggingSystem::initialize(log_level, log_file, 10*1024*1024, 5, foreground_mode_)) {
             std::cerr << "Failed to initialize logging system" << std::endl;
             return false;
         }
         
-        LOG_INFO("Daemon initialization started", {{"config_path", config_path}});
+        LOG_INFO("Daemon initialization started", {
+            {"config_path", config_path}, 
+            {"foreground_mode", foreground_mode_ ? "true" : "false"}
+        });
         
         // Setup signal handlers
         setup_signal_handlers();
@@ -136,8 +146,8 @@ void DaemonCore::run() {
     running_ = true;
     shutdown_requested_ = false;
     
-    // Perform daemonization if not already done
-    if (!daemonize()) {
+    // Perform daemonization if not in foreground mode
+    if (!foreground_mode_ && !daemonize()) {
         LOG_ERROR("Failed to daemonize process");
         running_ = false;
         return;
@@ -329,8 +339,33 @@ bool DaemonCore::perform_sensor_cycle() {
     try {
         PERF_TIMER("sensor_cycle");
         
+        // Check sensor connectivity before attempting to read
+        if (!sensor_interface_->is_connected()) {
+            LOG_DEBUG("Sensor not connected, attempting to reconnect");
+            metrics_.i2c_connection_failures++;
+            
+            // Try to reinitialize sensor connection
+            if (sensor_interface_->initialize()) {
+                LOG_INFO("Sensor reconnection successful");
+            } else {
+                LOG_DEBUG("Sensor reconnection failed, will retry next cycle");
+                return false;
+            }
+        }
+        
         // Read sensor data
         SensorReading reading = sensor_interface_->read_sensor();
+        
+        // Validate reading has at least one valid measurement
+        bool has_valid_data = reading.co2_ppm.has_value() || 
+                             reading.temperature_c.has_value() || 
+                             reading.humidity_percent.has_value();
+        
+        if (!has_valid_data) {
+            LOG_DEBUG("Sensor reading contains no valid data - sensor may not be ready");
+            metrics_.sensor_readings_failed++;
+            return false;
+        }
         
         // Store the reading
         if (storage_->store_reading(reading)) {
@@ -340,13 +375,25 @@ bool DaemonCore::perform_sensor_cycle() {
             LOG_DEBUG("Sensor reading stored successfully", {
                 {"co2", reading.co2_ppm ? std::to_string(*reading.co2_ppm) : "null"},
                 {"temp", reading.temperature_c ? std::to_string(*reading.temperature_c) : "null"},
-                {"humidity", reading.humidity_percent ? std::to_string(*reading.humidity_percent) : "null"}
+                {"humidity", reading.humidity_percent ? std::to_string(*reading.humidity_percent) : "null"},
+                {"quality_flags", std::to_string(reading.quality_flags)}
             });
             
             return true;
         } else {
             metrics_.storage_writes_failed++;
-            LOG_WARN("Failed to store sensor reading");
+            LOG_WARN("Failed to store sensor reading - storage may be unhealthy");
+            
+            // Check storage health and attempt recovery if needed
+            if (!storage_->is_healthy()) {
+                LOG_ERROR("Storage engine reports unhealthy status");
+                error_handler_->handle_error(
+                    std::runtime_error("Storage engine unhealthy"), 
+                    ErrorSeverity::WARNING, 
+                    "storage_health_check"
+                );
+            }
+            
             return false;
         }
         
@@ -354,37 +401,82 @@ bool DaemonCore::perform_sensor_cycle() {
         metrics_.sensor_readings_failed++;
         metrics_.i2c_connection_failures++;
         error_handler_->handle_error(e, ErrorSeverity::RECOVERABLE, "sensor_reading");
+        
+        // Log sensor statistics for troubleshooting
+        auto sensor_stats = sensor_interface_->get_stats();
+        LOG_DEBUG("I2C communication failed", {
+            {"successful_reads", std::to_string(sensor_stats.successful_reads)},
+            {"failed_reads", std::to_string(sensor_stats.failed_reads)},
+            {"reconnection_attempts", std::to_string(sensor_stats.reconnection_attempts)},
+            {"last_error", sensor_interface_->get_last_error()}
+        });
+        
         return false;
         
     } catch (const std::exception& e) {
         metrics_.sensor_readings_failed++;
         error_handler_->handle_error(e, ErrorSeverity::WARNING, "sensor_cycle");
+        
+        LOG_ERROR("Unexpected error in sensor cycle", {
+            {"error_type", typeid(e).name()},
+            {"error_message", e.what()}
+        });
+        
         return false;
     }
 }
 
 bool DaemonCore::initialize_components() {
     try {
+        LOG_INFO("Initializing daemon components");
+        
+        // Initialize storage first (required for data persistence)
+        storage_ = std::make_unique<TimeSeriesStorage>();
+        if (!storage_->initialize(config_.storage.data_directory, config_.daemon.data_retention)) {
+            LOG_ERROR("Failed to initialize storage engine", {
+                {"data_directory", config_.storage.data_directory},
+                {"retention_hours", std::to_string(config_.daemon.data_retention.count())}
+            });
+            return false;
+        }
+        LOG_INFO("Storage engine initialized successfully", {
+            {"data_directory", config_.storage.data_directory},
+            {"db_size_bytes", std::to_string(storage_->get_database_size())},
+            {"retention_hours", std::to_string(config_.daemon.data_retention.count())}
+        });
+        
         // Initialize sensor interface
         sensor_interface_ = std::make_unique<SCD40Interface>(config_.sensor);
         if (!sensor_interface_->initialize()) {
-            LOG_ERROR("Failed to initialize sensor interface");
-            return false;
+            LOG_WARN("Sensor interface initialization failed - will continue with periodic reconnection attempts", {
+                {"i2c_device", config_.sensor.i2c_device},
+                {"i2c_address", std::to_string(config_.sensor.i2c_address)},
+                {"last_error", sensor_interface_->get_last_error()}
+            });
+            // Don't fail initialization if sensor is not available - daemon should continue
+            // and attempt to reconnect periodically
+        } else {
+            LOG_INFO("Sensor interface initialized successfully", {
+                {"i2c_device", config_.sensor.i2c_device},
+                {"i2c_address", std::to_string(config_.sensor.i2c_address)}
+            });
         }
-        LOG_INFO("Sensor interface initialized");
         
-        // Initialize storage
-        storage_ = std::make_unique<TimeSeriesStorage>();
-        if (!storage_->initialize(config_.storage.data_directory, config_.daemon.data_retention)) {
-            LOG_ERROR("Failed to initialize storage engine");
-            return false;
-        }
-        LOG_INFO("Storage engine initialized");
+        // Log component initialization summary
+        LOG_INFO("Component initialization completed", {
+            {"storage_healthy", storage_->is_healthy() ? "true" : "false"},
+            {"sensor_connected", sensor_interface_->is_connected() ? "true" : "false"},
+            {"sampling_interval_seconds", std::to_string(config_.daemon.sampling_interval.count())}
+        });
         
         return true;
         
     } catch (const std::exception& e) {
         error_handler_->handle_error(e, ErrorSeverity::CRITICAL, "component_initialization");
+        LOG_CRITICAL("Critical error during component initialization", {
+            {"error_type", typeid(e).name()},
+            {"error_message", e.what()}
+        });
         return false;
     }
 }
@@ -441,26 +533,64 @@ void DaemonCore::notify_systemd(const std::string& status) {
 }
 
 bool DaemonCore::check_system_health() {
+    bool system_healthy = true;
+    
     // Check memory usage
     uint64_t memory_usage = get_memory_usage();
     if (memory_usage > 10 * 1024 * 1024) { // 10MB limit
-        LOG_WARN("Memory usage exceeds limit", {{"usage_mb", std::to_string(memory_usage / 1024 / 1024)}});
-        return false;
+        LOG_WARN("Memory usage exceeds limit", {
+            {"usage_mb", std::to_string(memory_usage / 1024 / 1024)},
+            {"limit_mb", "10"}
+        });
+        system_healthy = false;
     }
     
     // Check storage health
     if (!storage_->is_healthy()) {
-        LOG_WARN("Storage engine reports unhealthy status");
-        return false;
+        LOG_WARN("Storage engine reports unhealthy status", {
+            {"db_size_bytes", std::to_string(storage_->get_database_size())},
+            {"storage_stats", storage_->get_statistics()}
+        });
+        system_healthy = false;
     }
     
     // Check sensor connectivity
     if (!sensor_interface_->is_connected()) {
-        LOG_WARN("Sensor interface reports disconnected status");
-        return false;
+        auto sensor_stats = sensor_interface_->get_stats();
+        LOG_WARN("Sensor interface reports disconnected status", {
+            {"successful_reads", std::to_string(sensor_stats.successful_reads)},
+            {"failed_reads", std::to_string(sensor_stats.failed_reads)},
+            {"reconnection_attempts", std::to_string(sensor_stats.reconnection_attempts)},
+            {"last_error", sensor_interface_->get_last_error()}
+        });
+        system_healthy = false;
     }
     
-    return true;
+    // Check CPU usage
+    double cpu_usage = get_cpu_usage();
+    if (cpu_usage > 50.0) { // 50% CPU limit
+        LOG_WARN("CPU usage is high", {
+            {"cpu_percent", std::to_string(cpu_usage)},
+            {"limit_percent", "50"}
+        });
+        // Don't mark as unhealthy for high CPU, just warn
+    }
+    
+    // Log overall health status periodically
+    static auto last_health_log = std::chrono::steady_clock::now();
+    auto now = std::chrono::steady_clock::now();
+    if (now - last_health_log >= std::chrono::minutes(10)) {
+        LOG_INFO("System health check", {
+            {"healthy", system_healthy ? "true" : "false"},
+            {"memory_mb", std::to_string(memory_usage / 1024 / 1024)},
+            {"cpu_percent", std::to_string(cpu_usage)},
+            {"storage_healthy", storage_->is_healthy() ? "true" : "false"},
+            {"sensor_connected", sensor_interface_->is_connected() ? "true" : "false"}
+        });
+        last_health_log = now;
+    }
+    
+    return system_healthy;
 }
 
 bool DaemonCore::sleep_until_next_cycle() {

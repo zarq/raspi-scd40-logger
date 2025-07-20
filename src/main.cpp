@@ -2,6 +2,9 @@
 #include <string>
 #include <cstdlib>
 #include <getopt.h>
+#include <unistd.h>
+#include <csignal>
+#include <iomanip>
 #include "daemon_core.hpp"
 #include "config_manager.hpp"
 
@@ -60,20 +63,72 @@ int main(int argc, char* argv[]) {
         }
     }
     
+    // Validate configuration file path
+    if (!config_path.empty() && access(config_path.c_str(), R_OK) != 0) {
+        std::cerr << "Error: Configuration file '" << config_path 
+                  << "' is not readable or does not exist" << std::endl;
+        return 1;
+    }
+    
     try {
         // Create and initialize daemon
         sensor_daemon::DaemonCore daemon;
         
-        if (!daemon.initialize(config_path)) {
-            std::cerr << "Failed to initialize daemon" << std::endl;
+        if (foreground) {
+            std::cout << "Initializing sensor daemon..." << std::endl;
+            std::cout << "Configuration file: " << config_path << std::endl;
+        }
+        
+        if (!daemon.initialize(config_path, foreground)) {
+            std::cerr << "Failed to initialize daemon. Check logs for details." << std::endl;
+            if (foreground) {
+                std::cerr << "Common issues:" << std::endl;
+                std::cerr << "  - Configuration file not found or invalid" << std::endl;
+                std::cerr << "  - Insufficient permissions for data directory" << std::endl;
+                std::cerr << "  - I2C device not accessible (check /dev/i2c-* permissions)" << std::endl;
+            }
             return 1;
+        }
+        
+        // Set up signal handling for graceful shutdown
+        std::signal(SIGINT, [](int) { 
+            std::cout << "\nReceived interrupt signal, shutting down gracefully..." << std::endl; 
+        });
+        std::signal(SIGTERM, [](int) { 
+            std::cout << "\nReceived termination signal, shutting down gracefully..." << std::endl; 
+        });
+        
+        if (foreground) {
+            std::cout << "Sensor daemon initialized successfully" << std::endl;
+            std::cout << "Starting main data collection loop..." << std::endl;
+            std::cout << "Press Ctrl+C to stop the daemon" << std::endl;
         }
         
         // Run the daemon
         daemon.run();
         
+        if (foreground) {
+            auto metrics = daemon.get_metrics();
+            std::cout << "Sensor daemon stopped." << std::endl;
+            std::cout << "Session statistics:" << std::endl;
+            std::cout << "  Uptime: " << metrics.get_uptime().count() << " seconds" << std::endl;
+            std::cout << "  Successful sensor readings: " << metrics.sensor_readings_success << std::endl;
+            std::cout << "  Failed sensor readings: " << metrics.sensor_readings_failed << std::endl;
+            std::cout << "  Successful storage writes: " << metrics.storage_writes_success << std::endl;
+            std::cout << "  Failed storage writes: " << metrics.storage_writes_failed << std::endl;
+            if (metrics.sensor_readings_success + metrics.sensor_readings_failed > 0) {
+                std::cout << "  Sensor success rate: " << 
+                    std::fixed << std::setprecision(1) << 
+                    (metrics.get_sensor_success_rate() * 100.0) << "%" << std::endl;
+            }
+        }
+        
         return 0;
         
+    } catch (const sensor_daemon::ConfigurationError& e) {
+        std::cerr << "Configuration error: " << e.what() << std::endl;
+        std::cerr << "Please check your configuration file: " << config_path << std::endl;
+        return 1;
     } catch (const std::exception& e) {
         std::cerr << "Fatal error: " << e.what() << std::endl;
         return 1;

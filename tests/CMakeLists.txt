@@ -9,6 +9,8 @@ if(GTest_FOUND)
         test_scd40_interface.cpp
         test_logging_system.cpp
         test_daemon_core.cpp
+        test_integration.cpp
+        test_main_integration.cpp
     )
     
     # Create test executable

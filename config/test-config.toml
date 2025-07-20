@@ -1,0 +1,19 @@
+# Test Configuration for Sensor Daemon Integration Testing
+# This configuration is designed for testing without requiring actual hardware
+
+[daemon]
+sampling_interval_seconds = 2
+data_retention_days = 1
+log_level = "debug"
+
+[sensor]
+i2c_device = "/dev/i2c-1"
+i2c_address = 0x62
+connection_timeout_ms = 500
+max_retries = 2
+
+[storage]
+data_directory = "/tmp/sensor-daemon-test"
+file_rotation_hours = 1
+compression_enabled = true
+max_memory_cache_mb = 2

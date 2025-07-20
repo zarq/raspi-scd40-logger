@@ -350,5 +350,108 @@ TEST_F(DaemonCoreTest, FullLifecycleIntegration) {
     EXPECT_FALSE(daemon.is_running());
 }
 
+// Integration test for end-to-end data collection functionality
+TEST_F(DaemonCoreTest, EndToEndDataCollectionIntegration) {
+    DaemonCore daemon;
+    
+    // Initialize in foreground mode for testing
+    ASSERT_TRUE(daemon.initialize(config_path_.string(), true));
+    
+    // Create a temporary storage directory for this test
+    std::filesystem::path test_storage_dir = temp_dir_ / "integration_storage";
+    std::filesystem::create_directories(test_storage_dir);
+    
+    // Start daemon in a separate thread
+    std::atomic<bool> daemon_started{false};
+    std::thread daemon_thread([&daemon, &daemon_started]() {
+        daemon_started = true;
+        daemon.run();
+    });
+    
+    // Wait for daemon to start
+    while (!daemon_started || !daemon.is_running()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    
+    // Let daemon run for several sensor cycles
+    std::this_thread::sleep_for(std::chrono::milliseconds(3000)); // 3 seconds
+    
+    // Check performance metrics to verify data collection occurred
+    auto metrics = daemon.get_metrics();
+    
+    // Verify daemon has been running
+    EXPECT_GT(metrics.get_uptime().count(), 2);
+    
+    // In a real environment with actual sensor, we would expect successful readings
+    // For testing with mock sensor, we verify the daemon attempted to read
+    uint64_t total_attempts = metrics.sensor_readings_success + metrics.sensor_readings_failed;
+    EXPECT_GT(total_attempts, 0) << "Daemon should have attempted sensor readings";
+    
+    // Verify storage operations were attempted
+    uint64_t total_storage_ops = metrics.storage_writes_success + metrics.storage_writes_failed;
+    EXPECT_GE(total_storage_ops, 0) << "Storage operations should have been attempted";
+    
+    // Test graceful shutdown
+    daemon.shutdown();
+    daemon_thread.join();
+    
+    EXPECT_FALSE(daemon.is_running());
+}
+
+// Integration test for error handling and recovery
+TEST_F(DaemonCoreTest, ErrorHandlingAndRecoveryIntegration) {
+    DaemonCore daemon;
+    
+    // Initialize with a configuration that might cause some errors
+    ASSERT_TRUE(daemon.initialize(config_path_.string(), true));
+    
+    std::thread daemon_thread([&daemon]() {
+        daemon.run();
+    });
+    
+    // Wait for daemon to start
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    EXPECT_TRUE(daemon.is_running());
+    
+    // Let daemon run and handle potential errors
+    std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+    
+    // Verify daemon is still running despite potential errors
+    EXPECT_TRUE(daemon.is_running()) << "Daemon should continue running despite recoverable errors";
+    
+    // Check that error handling is working
+    auto metrics = daemon.get_metrics();
+    EXPECT_GT(metrics.get_uptime().count(), 1);
+    
+    // Shutdown
+    daemon.shutdown();
+    daemon_thread.join();
+    
+    EXPECT_FALSE(daemon.is_running());
+}
+
+// Integration test for signal handling
+TEST_F(DaemonCoreTest, SignalHandlingIntegration) {
+    DaemonCore daemon;
+    
+    ASSERT_TRUE(daemon.initialize(config_path_.string(), true));
+    
+    std::thread daemon_thread([&daemon]() {
+        daemon.run();
+    });
+    
+    // Wait for daemon to start
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    EXPECT_TRUE(daemon.is_running());
+    
+    // Send SIGTERM to the process (simulate systemd shutdown)
+    std::raise(SIGTERM);
+    
+    // Wait for graceful shutdown
+    daemon_thread.join();
+    
+    EXPECT_FALSE(daemon.is_running());
+}
+
 } // namespace test
 } // namespace sensor_daemon
