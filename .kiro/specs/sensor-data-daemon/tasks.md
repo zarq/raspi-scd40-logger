@@ -18,7 +18,9 @@
   - Commit changes to git with message "Add configuration management system with TOML support"
   - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5_
 
-- [-] 3. Create Protocol Buffers schema and data models
+- [x] 3. Create Protocol Buffers schema and data models
+
+
 
 
 
@@ -31,7 +33,10 @@
   - Commit changes to git with message "Add Protocol Buffers schema and data models"
   - _Requirements: 3.1, 3.3, 3.6_
 
-- [ ] 4. Implement time-series storage engine (write-only)
+- [-] 4. Implement time-series storage engine (write-only)
+
+
+
   - Create TimeSeriesStorage class with RocksDB backend focused only on data writing
   - Implement database initialization with appropriate RocksDB options for time-series data
   - Create store_reading method to persist sensor data with timestamp-based keys

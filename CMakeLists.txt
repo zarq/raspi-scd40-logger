@@ -67,6 +67,7 @@ set(DAEMON_SOURCES
     src/main.cpp
     src/config_manager.cpp
     src/sensor_data.cpp
+    src/time_series_storage.cpp
     # Additional source files will be added in subsequent tasks
 )
 
