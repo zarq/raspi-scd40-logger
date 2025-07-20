@@ -5,7 +5,7 @@
 #include <chrono>
 #include <rocksdb/db.h>
 #include <rocksdb/options.h>
-#include <rocksdb/utilities/ttl.h>
+#include <rocksdb/utilities/db_ttl.h>
 #include "sensor_data.hpp"
 
 namespace sensor_daemon {
