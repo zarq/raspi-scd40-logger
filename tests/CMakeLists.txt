@@ -11,6 +11,9 @@ if(GTest_FOUND)
         test_daemon_core.cpp
         test_integration.cpp
         test_main_integration.cpp
+        test_performance.cpp
+        test_stress.cpp
+        test_data_integrity.cpp
     )
     
     # Create test executable
