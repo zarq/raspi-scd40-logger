@@ -13,7 +13,7 @@ endif()
 
 # Compiler flags
 set(CMAKE_CXX_FLAGS_DEBUG "-g -O0 -Wall -Wextra -Wpedantic")
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG -Wall -Wextra -Wpedantic")
 
 # Find required packages
 find_package(PkgConfig REQUIRED)
@@ -99,6 +99,7 @@ target_link_libraries(sensor-daemon
     ${SPDLOG_LIBRARY}
     ${Protobuf_LIBRARIES}
     Threads::Threads
+    fmt
 )
 
 # Add systemd support if available
