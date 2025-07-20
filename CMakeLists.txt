@@ -66,6 +66,7 @@ target_include_directories(sensor_proto PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
 set(DAEMON_SOURCES
     src/main.cpp
     src/config_manager.cpp
+    src/sensor_data.cpp
     # Additional source files will be added in subsequent tasks
 )
 

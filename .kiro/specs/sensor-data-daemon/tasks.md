@@ -1,12 +1,6 @@
 # Implementation Plan
 
 - [x] 1. Set up project structure and build system
-
-
-
-
-
-
   - Create CMake project structure with src/, include/, tests/, and proto/ directories
   - Configure CMakeLists.txt with C++20 standard and required dependencies (RocksDB, Protobuf, spdlog, toml11)
   - Set up Protocol Buffers schema compilation for sensor data messages
@@ -14,18 +8,7 @@
   - Commit changes to git with message "Initial project structure and build system setup"
   - _Requirements: All requirements depend on proper project setup_
 
-- [-] 2. Implement configuration management system
-
-
-
-
-
-
-
-
-
-
-
+- [x] 2. Implement configuration management system
   - Create ConfigManager class to parse TOML configuration files
   - Define DaemonConfig struct with all configuration sections (daemon, sensor, storage)
   - Implement configuration validation with appropriate defaults
@@ -35,7 +18,10 @@
   - Commit changes to git with message "Add configuration management system with TOML support"
   - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5_
 
-- [ ] 3. Create Protocol Buffers schema and data models
+- [-] 3. Create Protocol Buffers schema and data models
+
+
+
   - Define SensorReading protobuf message with timestamp, CO2, temperature, humidity, and quality flags
   - Generate C++ classes from protobuf schema
   - Create SensorReading C++ struct for internal use with std::optional fields for missing values

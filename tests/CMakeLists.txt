@@ -4,6 +4,7 @@ if(GTest_FOUND)
     # Test sources
     set(TEST_SOURCES
         test_config_manager.cpp
+        test_sensor_data.cpp
         # Additional test sources will be added in subsequent tasks
         # test_daemon_core.cpp
         # test_sensor_interface.cpp
@@ -30,9 +31,10 @@ if(GTest_FOUND)
         ${CMAKE_CURRENT_SOURCE_DIR}/../src
     )
     
-    # Add config_manager.cpp to test build
+    # Add source files to test build
     target_sources(sensor_daemon_tests PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/config_manager.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/sensor_data.cpp
     )
     
     # Register test
