@@ -5,6 +5,8 @@
 
 set -e
 
+EXECUTABLE=./build/sensor-daemon
+
 echo "=== Sensor Daemon Integration Test ==="
 echo
 
@@ -39,13 +41,13 @@ echo
 # Test 1: Help and version
 echo "Test 1: Command-line help and version"
 echo "--------------------------------------"
-if [ -f "./sensor-daemon" ]; then
-    ./sensor-daemon --help
+if [ -f "$EXECUTABLE" ]; then
+    "$EXECUTABLE" --help
     echo
-    ./sensor-daemon --version
+    "$EXECUTABLE" --version
     echo
 else
-    echo "sensor-daemon executable not found. Please build the project first."
+    echo "sensor-daemon executable ($EXECUTABLE) not found. Please build the project first."
     exit 1
 fi
 
@@ -53,18 +55,18 @@ fi
 echo "Test 2: Configuration validation"
 echo "--------------------------------"
 echo "Testing with valid configuration..."
-timeout 5s ./sensor-daemon --config "$TEST_CONFIG" --foreground || echo "Daemon stopped (expected due to timeout)"
+timeout 5s "$EXECUTABLE" --config "$TEST_CONFIG" --foreground || echo "Daemon stopped (expected due to timeout)"
 echo
 
 echo "Testing with invalid configuration..."
-timeout 2s ./sensor-daemon --config "/nonexistent/config.toml" --foreground 2>&1 || echo "Failed as expected with invalid config"
+timeout 2s "$EXECUTABLE" --config "/nonexistent/config.toml" --foreground 2>&1 || echo "Failed as expected with invalid config"
 echo
 
 # Test 3: Foreground mode operation
 echo "Test 3: Foreground mode operation"
 echo "----------------------------------"
 echo "Running daemon in foreground for 10 seconds..."
-timeout 10s ./sensor-daemon --config "$TEST_CONFIG" --foreground || echo "Daemon completed test run"
+timeout 10s "$EXECUTABLE" --config "$TEST_CONFIG" --foreground || echo "Daemon completed test run"
 echo
 
 # Test 4: Check generated files
