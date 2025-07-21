@@ -608,7 +608,7 @@ bool DaemonCore::initialize_health_monitoring() {
         
         // Start HTTP monitoring server if enabled
         if (config_.monitoring.http_server_enabled) {
-            health_server_ = std::make_unique<HealthMonitorServer>(health_monitor_.get());
+            health_server_ = std::make_unique<HealthMonitorServer>(health_monitor_.get(), storage_.get());
             if (!health_server_->start(config_.monitoring.http_server_port, 
                                      config_.monitoring.http_server_bind_address)) {
                 LOG_WARN("Failed to start health monitor HTTP server, continuing without it");

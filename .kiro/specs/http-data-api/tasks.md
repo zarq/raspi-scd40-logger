@@ -1,6 +1,8 @@
 # Implementation Plan
 
-- [-] 1. Add data query methods to TimeSeriesStorage
+- [x] 1. Add data query methods to TimeSeriesStorage
+
+
 
   - Implement get_recent_readings method to retrieve last N sensor readings using reverse iterator
   - Add get_readings_in_range method for time-based queries with efficient RocksDB range scans
@@ -11,7 +13,8 @@
   - Commit changes to git with message "Add data query methods to TimeSeriesStorage"
   - _Requirements: 1.1, 1.2, 2.1, 2.2, 4.1, 4.2_
 
-- [ ] 2. Extend HealthMonitorServer to accept TimeSeriesStorage
+- [-] 2. Extend HealthMonitorServer to accept TimeSeriesStorage
+
   - Modify HealthMonitorServer constructor to accept optional TimeSeriesStorage pointer
   - Update DaemonCore initialization to pass storage instance to health server
   - Add storage availability checks in server initialization

@@ -289,8 +289,9 @@ public:
     /**
      * Constructor
      * @param health_monitor Health monitor to use for status
+     * @param storage Optional time series storage for data queries
      */
-    HealthMonitorServer(HealthMonitor* health_monitor);
+    HealthMonitorServer(HealthMonitor* health_monitor, TimeSeriesStorage* storage = nullptr);
     
     /**
      * Destructor - ensures server is stopped
@@ -324,6 +325,7 @@ public:
 
 private:
     HealthMonitor* health_monitor_;
+    TimeSeriesStorage* storage_;
     bool running_;
     int port_;
     std::string bind_address_;
@@ -363,5 +365,6 @@ private:
      * @return HTTP response indicating if daemon is alive
      */
     std::string handle_liveness_request() const;
+};
 
 } // namespace sensor_daemon

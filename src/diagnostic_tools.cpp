@@ -1586,8 +1586,8 @@ bool DiagnosticTools::create_parent_directories(const std::string& file_path) {
 }
 
 // HealthMonitorServer implementation
-HealthMonitorServer::HealthMonitorServer(HealthMonitor* health_monitor)
-    : health_monitor_(health_monitor), running_(false), port_(8080), bind_address_("127.0.0.1") {
+HealthMonitorServer::HealthMonitorServer(HealthMonitor* health_monitor, TimeSeriesStorage* storage)
+    : health_monitor_(health_monitor), storage_(storage), running_(false), port_(8080), bind_address_("127.0.0.1") {
 }
 
 HealthMonitorServer::~HealthMonitorServer() {
@@ -1803,6 +1803,10 @@ std::string HealthMonitorServer::handle_health_request() const {
         json << "{\n";
         json << "  \"status\": \"" << status.get_status_string() << "\",\n";
         json << "  \"operational\": " << (status.is_operational() ? "true" : "false") << ",\n";
+        json << "  \"storage_available\": " << (storage_ ? "true" : "false") << ",\n";
+        if (storage_) {
+            json << "  \"storage_healthy\": " << (storage_->is_healthy() ? "true" : "false") << ",\n";
+        }
         json << "  \"timestamp\": " << std::chrono::duration_cast<std::chrono::seconds>(
             std::chrono::system_clock::now().time_since_epoch()).count() << "\n";
         json << "}\n";
