@@ -42,3 +42,4 @@
 
 # Generated output 
 build/
+**/__pycache__/
