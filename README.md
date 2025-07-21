@@ -17,6 +17,7 @@ A lightweight Linux daemon written in modern C++ that continuously reads sensor 
 
 - CMake 3.16+
 - C++20 compatible compiler (GCC 10+ or Clang 10+)
+- pkg-conf
 - librocksdb-dev
 - libprotobuf-dev
 - protobuf-compiler
