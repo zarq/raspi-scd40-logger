@@ -261,4 +261,184 @@ void TimeSeriesStorage::log_storage_error(const std::string& operation,
     }
 }
 
+std::vector<SensorData> TimeSeriesStorage::get_recent_readings(int count) const {
+    std::vector<SensorData> readings;
+    
+    if (!db_ || count <= 0) {
+        return readings;
+    }
+    
+    // Limit count to prevent excessive memory usage
+    count = std::min(count, 10000);
+    
+    try {
+        auto iterator = create_iterator();
+        if (!iterator) {
+            return readings;
+        }
+        
+        // Start from the end (most recent) and work backwards
+        iterator->SeekToLast();
+        
+        while (iterator->Valid() && static_cast<int>(readings.size()) < count) {
+            // Deserialize the value
+            auto sensor_data = SensorDataConverter::deserialize(iterator->value().ToString());
+            if (sensor_data.has_value()) {
+                readings.push_back(sensor_data.value());
+            }
+            
+            iterator->Prev();
+        }
+        
+        if (!iterator->status().ok()) {
+            std::cerr << "Iterator error in get_recent_readings: " 
+                      << iterator->status().ToString() << std::endl;
+        }
+        
+    } catch (const std::exception& e) {
+        std::cerr << "Exception in get_recent_readings: " << e.what() << std::endl;
+    }
+    
+    return readings;
+}
+
+std::vector<SensorData> TimeSeriesStorage::get_readings_in_range(
+    std::chrono::system_clock::time_point start,
+    std::chrono::system_clock::time_point end,
+    int max_results) const {
+    
+    std::vector<SensorData> readings;
+    
+    if (!db_ || start > end) {
+        return readings;
+    }
+    
+    // Limit results to prevent excessive memory usage
+    max_results = std::min(max_results, 50000);
+    
+    try {
+        auto iterator = create_iterator();
+        if (!iterator) {
+            return readings;
+        }
+        
+        // Create start and end keys
+        std::string start_key = timestamp_to_key(start);
+        std::string end_key = timestamp_to_key(end);
+        
+        // Seek to start position
+        iterator->Seek(start_key);
+        
+        while (iterator->Valid() && 
+               iterator->key().ToString() <= end_key && 
+               static_cast<int>(readings.size()) < max_results) {
+            
+            // Deserialize the value
+            auto sensor_data = SensorDataConverter::deserialize(iterator->value().ToString());
+            if (sensor_data.has_value()) {
+                readings.push_back(sensor_data.value());
+            }
+            
+            iterator->Next();
+        }
+        
+        if (!iterator->status().ok()) {
+            std::cerr << "Iterator error in get_readings_in_range: " 
+                      << iterator->status().ToString() << std::endl;
+        }
+        
+    } catch (const std::exception& e) {
+        std::cerr << "Exception in get_readings_in_range: " << e.what() << std::endl;
+    }
+    
+    return readings;
+}
+
+TimeSeriesStorage::DatabaseInfo TimeSeriesStorage::get_database_info() const {
+    DatabaseInfo info;
+    info.database_path = data_directory_;
+    info.is_healthy = is_healthy();
+    info.database_size_bytes = get_database_size();
+    
+    if (!db_) {
+        info.total_records = 0;
+        info.earliest_timestamp = std::chrono::system_clock::now();
+        info.latest_timestamp = std::chrono::system_clock::now();
+        return info;
+    }
+    
+    try {
+        // Get approximate record count
+        std::string count_str;
+        if (db_->GetProperty("rocksdb.estimate-num-keys", &count_str)) {
+            info.total_records = std::stoull(count_str);
+        } else {
+            info.total_records = 0;
+        }
+        
+        // Find earliest and latest timestamps
+        auto iterator = create_iterator();
+        if (iterator) {
+            // Get earliest timestamp
+            iterator->SeekToFirst();
+            if (iterator->Valid()) {
+                auto earliest = key_to_timestamp(iterator->key().ToString());
+                if (earliest.has_value()) {
+                    info.earliest_timestamp = earliest.value();
+                } else {
+                    info.earliest_timestamp = std::chrono::system_clock::now();
+                }
+            } else {
+                info.earliest_timestamp = std::chrono::system_clock::now();
+            }
+            
+            // Get latest timestamp
+            iterator->SeekToLast();
+            if (iterator->Valid()) {
+                auto latest = key_to_timestamp(iterator->key().ToString());
+                if (latest.has_value()) {
+                    info.latest_timestamp = latest.value();
+                } else {
+                    info.latest_timestamp = std::chrono::system_clock::now();
+                }
+            } else {
+                info.latest_timestamp = info.earliest_timestamp;
+            }
+        } else {
+            info.earliest_timestamp = std::chrono::system_clock::now();
+            info.latest_timestamp = std::chrono::system_clock::now();
+        }
+        
+    } catch (const std::exception& e) {
+        std::cerr << "Exception in get_database_info: " << e.what() << std::endl;
+        info.total_records = 0;
+        info.earliest_timestamp = std::chrono::system_clock::now();
+        info.latest_timestamp = std::chrono::system_clock::now();
+    }
+    
+    return info;
+}
+
+std::unique_ptr<rocksdb::Iterator> TimeSeriesStorage::create_iterator() const {
+    if (!db_) {
+        return nullptr;
+    }
+    
+    rocksdb::ReadOptions read_options;
+    read_options.total_order_seek = true;  // Ensure consistent ordering
+    
+    return std::unique_ptr<rocksdb::Iterator>(db_->NewIterator(read_options));
+}
+
+std::string TimeSeriesStorage::get_start_key() const {
+    // Return key for timestamp 0 (earliest possible)
+    return timestamp_to_key(std::chrono::system_clock::time_point{});
+}
+
+std::string TimeSeriesStorage::get_end_key() const {
+    // Return key for maximum timestamp
+    auto max_time = std::chrono::system_clock::time_point::max();
+    return timestamp_to_key(max_time);
+}
+
 } // namespace sensor_daemon

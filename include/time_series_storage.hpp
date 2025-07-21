@@ -72,6 +72,44 @@ public:
      */
     void cleanup_old_data();
     
+    /**
+     * Get recent readings (newest first)
+     * @param count Maximum number of readings to retrieve (default: 100)
+     * @return Vector of sensor readings in reverse chronological order
+     */
+    std::vector<SensorData> get_recent_readings(int count = 100) const;
+    
+    /**
+     * Get readings in time range
+     * @param start Start timestamp (inclusive)
+     * @param end End timestamp (inclusive)
+     * @param max_results Maximum number of results to prevent memory exhaustion (default: 10000)
+     * @return Vector of sensor readings within the time range
+     */
+    std::vector<SensorData> get_readings_in_range(
+        std::chrono::system_clock::time_point start,
+        std::chrono::system_clock::time_point end,
+        int max_results = 10000) const;
+    
+    /**
+     * Database information structure
+     */
+    struct DatabaseInfo {
+        uint64_t total_records;
+        uint64_t database_size_bytes;
+        std::chrono::system_clock::time_point earliest_timestamp;
+        std::chrono::system_clock::time_point latest_timestamp;
+        std::string database_path;
+        bool is_healthy;
+        std::string implementation = "RocksDB via HTTP API";
+    };
+    
+    /**
+     * Get database information and statistics
+     * @return Database information structure
+     */
+    DatabaseInfo get_database_info() const;
+    
 private:
     std::unique_ptr<rocksdb::DBWithTTL> db_;
     std::string data_directory_;
@@ -97,6 +135,37 @@ private:
      * @return Time point, or nullopt if key is invalid
      */
     std::optional<std::chrono::system_clock::time_point> key_to_timestamp(const std::string& key) const;
+    
+    /**
+     * Create a RocksDB iterator for reading data
+     * @return Unique pointer to iterator
+     */
+    std::unique_ptr<rocksdb::Iterator> create_iterator() const;
+    
+    /**
+     * Get the earliest possible key (for range queries)
+     * @return Key string representing earliest timestamp
+     */
+    std::string get_start_key() const;
+    
+    /**
+     * Get the latest possible key (for range queries)
+     * @return Key string representing latest timestamp
+     */
+    std::string get_end_key() const;
+    
+    /**
+     * Check if there's sufficient disk space for operations
+     * @return true if disk space is adequate
+     */
+    bool check_disk_space() const;
+    
+    /**
+     * Log storage-related errors with context
+     * @param operation Description of the operation that failed
+     * @param status RocksDB status containing error information
+     */
+    void log_storage_error(const std::string& operation, const rocksdb::Status& status) const;
     
     /**
      * Check available disk space and return true if sufficient
