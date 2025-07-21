@@ -12,6 +12,10 @@ echo
 
 # Create test data directory
 TEST_DATA_DIR="/tmp/sensor-daemon-integration-test"
+if [ -d "$TEST_DATA_DIR" ]; then
+    echo "Removing existing test data directory: $TEST_DATA_DIR"
+    rm -rf "$TEST_DATA_DIR"
+fi
 mkdir -p "$TEST_DATA_DIR"
 
 # Create test configuration
@@ -20,7 +24,7 @@ cat > "$TEST_CONFIG" << EOF
 [daemon]
 sampling_interval_seconds = 2
 data_retention_days = 1
-log_level = "info"
+log_level = "debug"
 
 [sensor]
 i2c_device = "/dev/i2c-1"

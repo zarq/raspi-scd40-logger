@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <sstream>
 #include <iomanip>
+#include "logging_system.hpp"
 
 namespace sensor_daemon {
 
@@ -22,7 +23,7 @@ SCD40Interface::~SCD40Interface() {
 }
 
 bool SCD40Interface::initialize() {
-    std::lock_guard<std::mutex> lock(connection_mutex_);
+    std::lock_guard<std::recursive_mutex> lock(connection_mutex_);
     
     // Close existing connection if any
     if (i2c_fd_ >= 0) {
@@ -75,7 +76,7 @@ SensorData SCD40Interface::read_sensor() {
         set_last_error("Sensor not connected");
         throw I2CError("Sensor not connected");
     }
-    
+
     int attempt = 0;
     bool success = false;
     
@@ -203,7 +204,6 @@ bool SCD40Interface::send_command(uint16_t command) {
     uint8_t buffer[2];
     buffer[0] = static_cast<uint8_t>(command >> 8);    // MSB
     buffer[1] = static_cast<uint8_t>(command & 0xFF);  // LSB
-    
     return write_data(buffer, sizeof(buffer));
 }
 
@@ -214,8 +214,11 @@ bool SCD40Interface::read_data_with_crc(uint8_t* buffer, size_t length) {
     
     ssize_t bytes_read = read(i2c_fd_, buffer, length);
     if (bytes_read != static_cast<ssize_t>(length)) {
+        LOG_DEBUG("Read failed, expected " + std::to_string(length) + 
+                  " bytes, got " + std::to_string(bytes_read));
         return false;
     }
+    LOG_DEBUG("Read " + std::to_string(bytes_read) + " bytes from sensor");
     
     // Validate CRC for each 3-byte group (2 data bytes + 1 CRC byte)
     for (size_t i = 0; i < length; i += 3) {
@@ -315,8 +318,8 @@ bool SCD40Interface::validate_reading(const SensorData& reading) {
 }
 
 bool SCD40Interface::attempt_reconnection(int attempt_count) {
-    std::lock_guard<std::mutex> lock(connection_mutex_);
-    
+    std::lock_guard<std::recursive_mutex> lock(connection_mutex_);
+
     // Update reconnection statistics
     {
         std::lock_guard<std::mutex> stats_lock(stats_mutex_);

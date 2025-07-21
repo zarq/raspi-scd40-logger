@@ -2,7 +2,6 @@
 
 #include <memory>
 #include <atomic>
-#include <thread>
 #include <chrono>
 #include <string>
 #include <csignal>
@@ -15,6 +14,8 @@
 #include "logging_system.hpp"
 #include "scd40_interface.hpp"
 #include "time_series_storage.hpp"
+
+#define EXPECTED_MEMORY_LIMIT_MB 50 // Expected memory usage limit in MB
 
 namespace sensor_daemon {
 
@@ -133,7 +134,6 @@ private:
     // Runtime state
     std::atomic<bool> running_;
     std::atomic<bool> shutdown_requested_;
-    std::thread main_thread_;
     bool foreground_mode_;
     
     // Performance tracking

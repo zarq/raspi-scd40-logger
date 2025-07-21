@@ -172,11 +172,6 @@ void DaemonCore::shutdown() {
     LOG_INFO("Shutdown requested");
     shutdown_requested_ = true;
     
-    // Wait for main thread to finish if it's running
-    if (main_thread_.joinable()) {
-        main_thread_.join();
-    }
-    
     notify_systemd("STOPPING=1");
 }
 
@@ -286,8 +281,6 @@ bool DaemonCore::daemonize() {
 }
 
 void DaemonCore::main_loop() {
-    LOG_INFO("Entering main event loop");
-    
     while (!shutdown_requested_ && running_) {
         try {
             // Check for signals
@@ -338,7 +331,7 @@ void DaemonCore::main_loop() {
 bool DaemonCore::perform_sensor_cycle() {
     try {
         PERF_TIMER("sensor_cycle");
-        
+
         // Check sensor connectivity before attempting to read
         if (!sensor_interface_->is_connected()) {
             LOG_DEBUG("Sensor not connected, attempting to reconnect");
@@ -378,7 +371,7 @@ bool DaemonCore::perform_sensor_cycle() {
                 {"humidity", reading.humidity_percent ? std::to_string(*reading.humidity_percent) : "null"},
                 {"quality_flags", std::to_string(reading.quality_flags)}
             });
-            
+
             return true;
         } else {
             metrics_.storage_writes_failed++;
@@ -538,14 +531,15 @@ void DaemonCore::notify_systemd(const std::string& status) {
 }
 
 bool DaemonCore::check_system_health() {
+    // TODO: Also check available disk space
     bool system_healthy = true;
     
     // Check memory usage
     uint64_t memory_usage = get_memory_usage();
-    if (memory_usage > 10 * 1024 * 1024) { // 10MB limit
+    if (memory_usage > EXPECTED_MEMORY_LIMIT_MB * 1024 * 1024) { // 10MB limit
         LOG_WARN("Memory usage exceeds limit", {
             {"usage_mb", std::to_string(memory_usage / 1024 / 1024)},
-            {"limit_mb", "10"}
+            {"limit_mb", std::to_string(EXPECTED_MEMORY_LIMIT_MB)}
         });
         system_healthy = false;
     }

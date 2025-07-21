@@ -82,7 +82,7 @@ private:
     int i2c_fd_;
     
     // Connection state
-    mutable std::mutex connection_mutex_;
+    mutable std::recursive_mutex connection_mutex_;
     std::atomic<bool> is_connected_;
     std::string last_error_;
     

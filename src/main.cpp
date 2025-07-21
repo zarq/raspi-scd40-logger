@@ -90,14 +90,6 @@ int main(int argc, char* argv[]) {
             return 1;
         }
         
-        // Set up signal handling for graceful shutdown
-        std::signal(SIGINT, [](int) { 
-            std::cout << "\nReceived interrupt signal, shutting down gracefully..." << std::endl; 
-        });
-        std::signal(SIGTERM, [](int) { 
-            std::cout << "\nReceived termination signal, shutting down gracefully..." << std::endl; 
-        });
-        
         if (foreground) {
             std::cout << "Sensor daemon initialized successfully" << std::endl;
             std::cout << "Starting main data collection loop..." << std::endl;
