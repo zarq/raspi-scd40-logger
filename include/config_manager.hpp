@@ -31,6 +31,29 @@ struct DaemonConfig {
         bool compression_enabled{true};
         size_t max_memory_cache_mb{5};
     } storage;
+    
+    struct AlertSettings {
+        bool enabled{true};
+        int check_interval_minutes{5};
+        int alert_cooldown_minutes{15};
+        double memory_usage_threshold_mb{15.0};
+        double cpu_usage_threshold_percent{75.0};
+        double min_sensor_success_rate{0.8};
+        double min_storage_success_rate{0.95};
+        int sensor_failure_threshold{10};
+        int disk_usage_threshold_percent{90};
+        int write_failure_threshold_per_hour{5};
+    } alerts;
+    
+    struct MonitoringSettings {
+        bool health_endpoint_enabled{true};
+        std::string health_status_file{"/var/run/sensor-daemon/health.json"};
+        int health_update_interval_seconds{60};
+        bool include_detailed_metrics{true};
+        bool http_server_enabled{false};
+        int http_server_port{8080};
+        std::string http_server_bind_address{"127.0.0.1"};
+    } monitoring;
 };
 
 /**
@@ -83,6 +106,16 @@ private:
      * Parse storage section from TOML
      */
     static void parse_storage_section(const toml::value& toml_data, DaemonConfig& config);
+    
+    /**
+     * Parse alerts section from TOML
+     */
+    static void parse_alerts_section(const toml::value& toml_data, DaemonConfig& config);
+    
+    /**
+     * Parse monitoring section from TOML
+     */
+    static void parse_monitoring_section(const toml::value& toml_data, DaemonConfig& config);
     
     /**
      * Validate log level string

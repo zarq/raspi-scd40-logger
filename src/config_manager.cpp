@@ -24,6 +24,8 @@ DaemonConfig ConfigManager::load_config(const std::string& config_path) {
         parse_daemon_section(toml_data, config);
         parse_sensor_section(toml_data, config);
         parse_storage_section(toml_data, config);
+        parse_alerts_section(toml_data, config);
+        parse_monitoring_section(toml_data, config);
         
         // Validate the final configuration
         validate_config(config);
@@ -89,6 +91,40 @@ void ConfigManager::validate_config(const DaemonConfig& config) {
     
     if (config.storage.max_memory_cache_mb < 1 || config.storage.max_memory_cache_mb > 100) {
         errors << "Memory cache must be between 1MB and 100MB. ";
+    }
+    
+    // Validate alerts section
+    if (config.alerts.check_interval_minutes < 1 || config.alerts.check_interval_minutes > 60) {
+        errors << "Alert check interval must be between 1 and 60 minutes. ";
+    }
+    
+    if (config.alerts.alert_cooldown_minutes < 1 || config.alerts.alert_cooldown_minutes > 1440) {
+        errors << "Alert cooldown must be between 1 minute and 24 hours. ";
+    }
+    
+    if (config.alerts.memory_usage_threshold_mb < 1 || config.alerts.memory_usage_threshold_mb > 1000) {
+        errors << "Memory usage threshold must be between 1MB and 1000MB. ";
+    }
+    
+    if (config.alerts.cpu_usage_threshold_percent < 1 || config.alerts.cpu_usage_threshold_percent > 100) {
+        errors << "CPU usage threshold must be between 1% and 100%. ";
+    }
+    
+    if (config.alerts.min_sensor_success_rate < 0.0 || config.alerts.min_sensor_success_rate > 1.0) {
+        errors << "Sensor success rate threshold must be between 0.0 and 1.0. ";
+    }
+    
+    if (config.alerts.min_storage_success_rate < 0.0 || config.alerts.min_storage_success_rate > 1.0) {
+        errors << "Storage success rate threshold must be between 0.0 and 1.0. ";
+    }
+    
+    // Validate monitoring section
+    if (config.monitoring.health_update_interval_seconds < 1 || config.monitoring.health_update_interval_seconds > 3600) {
+        errors << "Health update interval must be between 1 and 3600 seconds. ";
+    }
+    
+    if (config.monitoring.http_server_port < 1024 || config.monitoring.http_server_port > 65535) {
+        errors << "HTTP server port must be between 1024 and 65535. ";
     }
     
     std::string error_string = errors.str();
@@ -204,6 +240,86 @@ bool ConfigManager::is_valid_path(const std::string& path, bool must_exist) {
     // For relative paths, check if parent exists
     auto parent = fs_path.parent_path();
     return parent.empty() || std::filesystem::exists(parent);
+}
+
+void ConfigManager::parse_alerts_section(const toml::value& toml_data, DaemonConfig& config) {
+    if (toml_data.contains("alerts")) {
+        const auto& alerts_section = toml::find(toml_data, "alerts");
+        
+        if (alerts_section.contains("enabled")) {
+            config.alerts.enabled = toml::find<bool>(alerts_section, "enabled");
+        }
+        
+        if (alerts_section.contains("check_interval_minutes")) {
+            config.alerts.check_interval_minutes = toml::find<int>(alerts_section, "check_interval_minutes");
+        }
+        
+        if (alerts_section.contains("alert_cooldown_minutes")) {
+            config.alerts.alert_cooldown_minutes = toml::find<int>(alerts_section, "alert_cooldown_minutes");
+        }
+        
+        if (alerts_section.contains("memory_usage_threshold_mb")) {
+            config.alerts.memory_usage_threshold_mb = toml::find<double>(alerts_section, "memory_usage_threshold_mb");
+        }
+        
+        if (alerts_section.contains("cpu_usage_threshold_percent")) {
+            config.alerts.cpu_usage_threshold_percent = toml::find<double>(alerts_section, "cpu_usage_threshold_percent");
+        }
+        
+        if (alerts_section.contains("min_sensor_success_rate")) {
+            config.alerts.min_sensor_success_rate = toml::find<double>(alerts_section, "min_sensor_success_rate");
+        }
+        
+        if (alerts_section.contains("min_storage_success_rate")) {
+            config.alerts.min_storage_success_rate = toml::find<double>(alerts_section, "min_storage_success_rate");
+        }
+        
+        if (alerts_section.contains("sensor_failure_threshold")) {
+            config.alerts.sensor_failure_threshold = toml::find<int>(alerts_section, "sensor_failure_threshold");
+        }
+        
+        if (alerts_section.contains("disk_usage_threshold_percent")) {
+            config.alerts.disk_usage_threshold_percent = toml::find<int>(alerts_section, "disk_usage_threshold_percent");
+        }
+        
+        if (alerts_section.contains("write_failure_threshold_per_hour")) {
+            config.alerts.write_failure_threshold_per_hour = toml::find<int>(alerts_section, "write_failure_threshold_per_hour");
+        }
+    }
+}
+
+void ConfigManager::parse_monitoring_section(const toml::value& toml_data, DaemonConfig& config) {
+    if (toml_data.contains("monitoring")) {
+        const auto& monitoring_section = toml::find(toml_data, "monitoring");
+        
+        if (monitoring_section.contains("health_endpoint_enabled")) {
+            config.monitoring.health_endpoint_enabled = toml::find<bool>(monitoring_section, "health_endpoint_enabled");
+        }
+        
+        if (monitoring_section.contains("health_status_file")) {
+            config.monitoring.health_status_file = toml::find<std::string>(monitoring_section, "health_status_file");
+        }
+        
+        if (monitoring_section.contains("health_update_interval_seconds")) {
+            config.monitoring.health_update_interval_seconds = toml::find<int>(monitoring_section, "health_update_interval_seconds");
+        }
+        
+        if (monitoring_section.contains("include_detailed_metrics")) {
+            config.monitoring.include_detailed_metrics = toml::find<bool>(monitoring_section, "include_detailed_metrics");
+        }
+        
+        if (monitoring_section.contains("http_server_enabled")) {
+            config.monitoring.http_server_enabled = toml::find<bool>(monitoring_section, "http_server_enabled");
+        }
+        
+        if (monitoring_section.contains("http_server_port")) {
+            config.monitoring.http_server_port = toml::find<int>(monitoring_section, "http_server_port");
+        }
+        
+        if (monitoring_section.contains("http_server_bind_address")) {
+            config.monitoring.http_server_bind_address = toml::find<std::string>(monitoring_section, "http_server_bind_address");
+        }
+    }
 }
 
 } // namespace sensor_daemon

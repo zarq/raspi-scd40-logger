@@ -82,6 +82,8 @@ set(DAEMON_SOURCES
     src/scd40_interface.cpp
     src/logging_system.cpp
     src/daemon_core.cpp
+    src/health_monitor.cpp
+    src/diagnostic_tools.cpp
 )
 
 add_executable(sensor-daemon ${DAEMON_SOURCES})
@@ -112,8 +114,48 @@ if(SYSTEMD_FOUND)
     target_include_directories(sensor-daemon PRIVATE ${SYSTEMD_INCLUDE_DIRS})
 endif()
 
+# Diagnostic utility executable
+set(DIAGNOSTIC_SOURCES
+    src/diagnostic_main.cpp
+    src/config_manager.cpp
+    src/sensor_data.cpp
+    src/time_series_storage.cpp
+    src/scd40_interface.cpp
+    src/logging_system.cpp
+    src/health_monitor.cpp
+    src/diagnostic_tools.cpp
+)
+
+add_executable(sensor-daemon-diagnostic ${DIAGNOSTIC_SOURCES})
+
+# Ensure diagnostic executable can find protobuf headers
+target_include_directories(sensor-daemon-diagnostic PRIVATE 
+    ${CMAKE_CURRENT_BINARY_DIR}
+    ${Protobuf_INCLUDE_DIRS}
+)
+
+# Add explicit dependency on sensor_proto
+add_dependencies(sensor-daemon-diagnostic sensor_proto)
+
+# Link libraries for diagnostic tool
+target_link_libraries(sensor-daemon-diagnostic
+    sensor_proto
+    ${ROCKSDB_LIBRARY}
+    ${SPDLOG_LIBRARY}
+    ${Protobuf_LIBRARIES}
+    Threads::Threads
+    fmt
+)
+
+# Add systemd support for diagnostic tool if available
+if(SYSTEMD_FOUND)
+    target_compile_definitions(sensor-daemon-diagnostic PRIVATE HAVE_SYSTEMD)
+    target_link_libraries(sensor-daemon-diagnostic ${SYSTEMD_LIBRARIES})
+    target_include_directories(sensor-daemon-diagnostic PRIVATE ${SYSTEMD_INCLUDE_DIRS})
+endif()
+
 # Installation
-install(TARGETS sensor-daemon DESTINATION bin)
+install(TARGETS sensor-daemon sensor-daemon-diagnostic DESTINATION bin)
 
 # Install systemd service file if requested
 if(INSTALL_SYSTEMD_SERVICE)

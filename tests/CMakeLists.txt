@@ -9,6 +9,8 @@ if(GTest_FOUND)
         test_scd40_interface.cpp
         test_logging_system.cpp
         test_daemon_core.cpp
+        test_health_monitor.cpp
+        test_diagnostic_tools.cpp
         test_integration.cpp
         test_main_integration.cpp
         test_performance.cpp
@@ -54,6 +56,8 @@ if(GTest_FOUND)
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/scd40_interface.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/logging_system.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/daemon_core.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/health_monitor.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/diagnostic_tools.cpp
     )
     
     # Register test

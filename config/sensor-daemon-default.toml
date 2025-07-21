@@ -96,6 +96,77 @@ metrics_interval_seconds = 300
 # Recommended: true for production deployments
 enabled = true
 
+# Alert check interval in minutes
+# Recommended: 5 minutes for balanced monitoring
+check_interval_minutes = 5
+
+# Alert cooldown period in minutes to prevent alert storms
+# Recommended: 15 minutes between repeated alerts
+alert_cooldown_minutes = 15
+
+# Alert when memory usage exceeds this MB
+# Recommended: 15MB for Raspberry Pi (daemon target is 10MB)
+memory_usage_threshold_mb = 15.0
+
+# Alert when CPU usage exceeds this percentage
+# Recommended: 75% to allow headroom for other processes
+cpu_usage_threshold_percent = 75.0
+
+# Alert when sensor success rate falls below this value (0.0-1.0)
+# Recommended: 0.8 (80%) for reliable data collection
+min_sensor_success_rate = 0.8
+
+# Alert when storage success rate falls below this value (0.0-1.0)
+# Recommended: 0.95 (95%) for data integrity
+min_storage_success_rate = 0.95
+
+# Alert when sensor communication fails for this many consecutive attempts
+# Recommended: 10 failures indicates serious connectivity issues
+sensor_failure_threshold = 10
+
+# Alert when disk usage exceeds this percentage
+# Recommended: 90% to allow time for cleanup
+disk_usage_threshold_percent = 90
+
+# Alert when database write failures exceed this count per hour
+# Recommended: 5 failures indicates storage issues
+write_failure_threshold_per_hour = 5
+
+[monitoring]
+# Enable health endpoint for external monitoring
+# Creates a JSON status file that can be read by monitoring tools
+health_endpoint_enabled = true
+
+# Path to health status file
+# Must be in a directory writable by sensor-daemon user
+health_status_file = "/var/run/sensor-daemon/health.json"
+
+# Health status update interval in seconds
+# Recommended: 60 seconds for responsive monitoring
+health_update_interval_seconds = 60
+
+# Include detailed metrics in health status file
+# Set to false for minimal status information
+include_detailed_metrics = true
+
+# Enable HTTP server for health monitoring
+# Provides /health and /metrics endpoints
+# WARNING: Only enable if needed, as it opens a network port
+http_server_enabled = false
+
+# HTTP server port (if enabled)
+# Use ports above 1024 to avoid requiring root privileges
+http_server_port = 8080
+
+# HTTP server bind address
+# Use 127.0.0.1 for local access only, 0.0.0.0 for all interfaces
+http_server_bind_address = "127.0.0.1"
+
+[alerts]
+# Enable basic alerting for critical conditions
+# Recommended: true for production deployments
+enabled = true
+
 # Alert when sensor communication fails for this many consecutive attempts
 sensor_failure_threshold = 10
 

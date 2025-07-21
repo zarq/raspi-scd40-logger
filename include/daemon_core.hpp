@@ -14,6 +14,8 @@
 #include "logging_system.hpp"
 #include "scd40_interface.hpp"
 #include "time_series_storage.hpp"
+#include "health_monitor.hpp"
+#include "diagnostic_tools.hpp"
 
 #define EXPECTED_MEMORY_LIMIT_MB 50 // Expected memory usage limit in MB
 
@@ -130,6 +132,8 @@ private:
     std::unique_ptr<SCD40Interface> sensor_interface_;
     std::unique_ptr<TimeSeriesStorage> storage_;
     std::unique_ptr<ErrorHandler> error_handler_;
+    std::unique_ptr<HealthMonitor> health_monitor_;
+    std::unique_ptr<HealthMonitorServer> health_server_;
     
     // Runtime state
     std::atomic<bool> running_;
@@ -139,6 +143,7 @@ private:
     // Performance tracking
     PerformanceMetrics metrics_;
     std::chrono::steady_clock::time_point last_metrics_log_;
+    std::chrono::steady_clock::time_point last_health_check_;
     
     // Signal handling
     static std::atomic<bool> signal_received_;
@@ -180,6 +185,12 @@ private:
     bool initialize_components();
     
     /**
+     * Initialize health monitoring system
+     * @return true if health monitoring initialized successfully
+     */
+    bool initialize_health_monitoring();
+    
+    /**
      * Cleanup all resources
      */
     void cleanup_resources();
@@ -196,6 +207,11 @@ private:
      * Update and log performance metrics
      */
     void update_performance_metrics();
+    
+    /**
+     * Perform periodic health checks
+     */
+    void perform_health_checks();
     
     /**
      * Send systemd notifications about daemon status

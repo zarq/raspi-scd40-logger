@@ -78,6 +78,7 @@ DaemonCore::DaemonCore()
     , shutdown_requested_(false)
     , error_handler_(std::make_unique<ErrorHandler>())
     , last_metrics_log_(std::chrono::steady_clock::now())
+    , last_health_check_(std::chrono::steady_clock::now())
     , foreground_mode_(false) {
     
     instance_ = this;
@@ -119,6 +120,12 @@ bool DaemonCore::initialize(const std::string& config_path, bool foreground) {
         // Initialize components
         if (!initialize_components()) {
             LOG_ERROR("Failed to initialize daemon components");
+            return false;
+        }
+        
+        // Initialize health monitoring
+        if (!initialize_health_monitoring()) {
+            LOG_ERROR("Failed to initialize health monitoring");
             return false;
         }
         
@@ -308,6 +315,9 @@ void DaemonCore::main_loop() {
             // Update performance metrics periodically
             update_performance_metrics();
             
+            // Perform health checks periodically
+            perform_health_checks();
+            
             // Sleep until next cycle (can be interrupted by shutdown)
             if (!sleep_until_next_cycle()) {
                 LOG_DEBUG("Sleep interrupted by shutdown signal");
@@ -478,6 +488,7 @@ void DaemonCore::cleanup_resources() {
     LOG_DEBUG("Cleaning up resources");
     
     // Reset components in reverse order of initialization
+    health_monitor_.reset();
     storage_.reset();
     sensor_interface_.reset();
     error_handler_.reset();
@@ -515,7 +526,150 @@ void DaemonCore::update_performance_metrics() {
         metrics_.cpu_usage_percent = get_cpu_usage();
         
         LoggingSystem::log_performance_metrics(metrics_);
+        
+        // Update health monitor with current metrics
+        if (health_monitor_) {
+            health_monitor_->update_performance_metrics(metrics_);
+        }
+        
         last_metrics_log_ = now;
+    }
+}
+
+bool DaemonCore::initialize_health_monitoring() {
+    try {
+        health_monitor_ = std::make_unique<HealthMonitor>();
+        
+        // Configure health monitoring from config file
+        AlertConfig alert_config;
+        alert_config.enabled = true;
+        
+        // Use configuration values if available
+        if (config_.alerts.enabled) {
+            alert_config.enabled = config_.alerts.enabled;
+            alert_config.check_interval = std::chrono::minutes(config_.alerts.check_interval_minutes);
+            alert_config.alert_cooldown = std::chrono::minutes(config_.alerts.alert_cooldown_minutes);
+            alert_config.max_memory_mb = config_.alerts.memory_usage_threshold_mb;
+            alert_config.max_cpu_percent = config_.alerts.cpu_usage_threshold_percent;
+            alert_config.min_sensor_success_rate = config_.alerts.min_sensor_success_rate;
+            alert_config.min_storage_success_rate = config_.alerts.min_storage_success_rate;
+            alert_config.max_i2c_failures_per_hour = config_.alerts.sensor_failure_threshold;
+        } else {
+            // Default values
+            alert_config.check_interval = std::chrono::minutes(5);
+            alert_config.alert_cooldown = std::chrono::minutes(15);
+            alert_config.max_memory_mb = 15.0;  // Slightly higher than daemon limit
+            alert_config.max_cpu_percent = 75.0;
+            alert_config.min_sensor_success_rate = 0.8;
+            alert_config.min_storage_success_rate = 0.95;
+            alert_config.max_i2c_failures_per_hour = 10;
+        }
+        
+        if (!health_monitor_->initialize(alert_config)) {
+            LOG_ERROR("Failed to initialize health monitor");
+            return false;
+        }
+        
+        // Register built-in health checks
+        health_monitor_->register_health_check("memory", 
+            [this]() { return health_checks::check_memory_usage(alert_config.max_memory_mb); });
+        
+        health_monitor_->register_health_check("cpu",
+            [this]() { return health_checks::check_cpu_usage(alert_config.max_cpu_percent); });
+        
+        health_monitor_->register_health_check("disk",
+            [this]() { return health_checks::check_disk_space(config_.storage.data_directory, 100.0); });
+        
+        health_monitor_->register_health_check("sensor",
+            [this]() { return health_checks::check_sensor_health(sensor_interface_.get(), 
+                                                              alert_config.min_sensor_success_rate); });
+        
+        health_monitor_->register_health_check("storage",
+            [this]() { return health_checks::check_storage_health(storage_.get(), 
+                                                               alert_config.min_storage_success_rate); });
+        
+        // Create health endpoint for external monitoring
+        HealthEndpointConfig endpoint_config;
+        endpoint_config.enabled = config_.monitoring.health_endpoint_enabled;
+        endpoint_config.status_file_path = config_.monitoring.health_status_file;
+        endpoint_config.update_interval = std::chrono::seconds(config_.monitoring.health_update_interval_seconds);
+        endpoint_config.include_detailed_metrics = config_.monitoring.include_detailed_metrics;
+        
+        if (endpoint_config.enabled) {
+            if (!DiagnosticTools::create_health_endpoint(health_monitor_.get(), endpoint_config)) {
+                LOG_WARN("Failed to create health endpoint, continuing without it");
+            } else {
+                LOG_INFO("Health endpoint created", {
+                    {"status_file", endpoint_config.status_file_path},
+                    {"update_interval", std::to_string(endpoint_config.update_interval.count())}
+                });
+            }
+        }
+        
+        // Start HTTP monitoring server if enabled
+        if (config_.monitoring.http_server_enabled) {
+            health_server_ = std::make_unique<HealthMonitorServer>(health_monitor_.get());
+            if (!health_server_->start(config_.monitoring.http_server_port, 
+                                     config_.monitoring.http_server_bind_address)) {
+                LOG_WARN("Failed to start health monitor HTTP server, continuing without it");
+            } else {
+                LOG_INFO("Health monitor HTTP server started", {
+                    {"url", health_server_->get_url()}
+                });
+            }
+        }
+        
+        LOG_INFO("Health monitoring initialized successfully", {
+            {"enabled", alert_config.enabled ? "true" : "false"},
+            {"check_interval_minutes", std::to_string(alert_config.check_interval.count())},
+            {"health_endpoint", endpoint_config.enabled ? "enabled" : "disabled"},
+            {"http_server", config_.monitoring.http_server_enabled ? "enabled" : "disabled"}
+        });
+        
+        return true;
+        
+    } catch (const std::exception& e) {
+        LOG_ERROR("Exception during health monitoring initialization", {
+            {"error", e.what()}
+        });
+        return false;
+    }
+}
+
+void DaemonCore::perform_health_checks() {
+    if (!health_monitor_) {
+        return;
+    }
+    
+    auto now = std::chrono::steady_clock::now();
+    auto elapsed = now - last_health_check_;
+    
+    // Perform health checks every 5 minutes
+    if (elapsed >= std::chrono::minutes(5)) {
+        try {
+            SystemHealthStatus health_status = health_monitor_->check_system_health();
+            
+            // Write status file for external monitoring
+            std::string status_file = "/var/run/sensor-daemon/health.json";
+            if (!health_monitor_->write_status_file(status_file)) {
+                LOG_DEBUG("Failed to write health status file", {{"file", status_file}});
+            }
+            
+            // Check if we should continue operation
+            if (!health_monitor_->should_continue_operation()) {
+                LOG_CRITICAL("Health monitor indicates system should not continue operation");
+                health_monitor_->record_health_event("daemon_core", "shutdown_requested", 
+                                                   "Health status indicates shutdown required");
+                shutdown_requested_ = true;
+            }
+            
+            last_health_check_ = now;
+            
+        } catch (const std::exception& e) {
+            LOG_ERROR("Exception during health check", {
+                {"error", e.what()}
+            });
+        }
     }
 }
 
