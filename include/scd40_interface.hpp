@@ -100,6 +100,7 @@ private:
     static constexpr std::chrono::milliseconds MEASUREMENT_INTERVAL{5000};
     static constexpr std::chrono::milliseconds COMMAND_DELAY{1};
     static constexpr std::chrono::milliseconds READ_TIMEOUT{100};
+    static constexpr std::chrono::milliseconds WAIT_AFTER_STOP{500};
     
     // Data validation ranges
     static constexpr float CO2_MIN = 400.0f;

@@ -106,7 +106,7 @@ SensorData SCD40Interface::read_sensor() {
         } catch (const std::exception& e) {
             set_last_error("Exception during sensor read: " + std::string(e.what()));
         }
-        
+
         if (!success) {
             attempt++;
             if (attempt < config_.max_retries) {
@@ -166,11 +166,17 @@ bool SCD40Interface::set_i2c_address() {
 }
 
 bool SCD40Interface::start_periodic_measurement() {
+    LOG_DEBUG("Starting periodic measurement on SCD40");
     return send_command(SCD40_CMD_START_PERIODIC);
 }
 
 bool SCD40Interface::stop_periodic_measurement() {
-    return send_command(SCD40_CMD_STOP_PERIODIC);
+    LOG_DEBUG("Stopping periodic measurement on SCD40");
+    if(!send_command(SCD40_CMD_STOP_PERIODIC)) {
+        return false;
+    }
+    std::this_thread::sleep_for(WAIT_AFTER_STOP);
+    return true;
 }
 
 bool SCD40Interface::read_measurement_raw(uint16_t& co2, uint16_t& temperature, uint16_t& humidity) {
