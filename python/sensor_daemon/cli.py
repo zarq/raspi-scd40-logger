@@ -5,7 +5,7 @@ Command-line interface for sensor-daemon Python package.
 import argparse
 import sys
 from datetime import datetime, timedelta
-from sensor_daemon import SensorDataReader
+from sensor_daemon import SensorDataReader, FULL_IMPLEMENTATION_AVAILABLE
 
 
 def main():
@@ -72,6 +72,13 @@ def main():
     
     if not args.command:
         parser.print_help()
+        return 1
+    
+    # Check implementation capabilities
+    if not FULL_IMPLEMENTATION_AVAILABLE and args.command in ["recent", "range", "aggregate"]:
+        print(f"Error: Command '{args.command}' requires full python-rocksdb implementation", file=sys.stderr)
+        print("Current implementation has limited functionality.", file=sys.stderr)
+        print("Install python-rocksdb for full features.", file=sys.stderr)
         return 1
     
     try:

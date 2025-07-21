@@ -16,7 +16,15 @@ try:
     import rocksdb
 except ImportError:
     raise ImportError(
-        "python-rocksdb is required. Install with: pip install python-rocksdb"
+        "python-rocksdb is required but failed to import. This may be due to compilation issues.\n"
+        "Try one of these installation methods:\n"
+        "1. pip install python-rocksdb\n"
+        "2. conda install python-rocksdb -c conda-forge\n"
+        "3. For Ubuntu/Debian: sudo apt-get install python3-rocksdb\n"
+        "4. Build from source: https://github.com/twmht/python-rocksdb\n"
+        "\nNote: python-rocksdb requires RocksDB C++ library to be installed.\n"
+        "On Ubuntu/Debian: sudo apt-get install librocksdb-dev\n"
+        "On macOS: brew install rocksdb"
     )
 
 try:

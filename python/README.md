@@ -9,8 +9,29 @@ This Python package provides a convenient interface for querying sensor data col
 - **Time-Series Queries**: Support for recent readings, time range queries, and statistical aggregations
 - **Daemon Status Monitoring**: Check if the sensor daemon is currently running
 - **Error Handling**: Comprehensive error handling for database and system issues
+- **Multiple RocksDB Backends**: Supports both `python-rocksdb` (full features) and `rocksdb-python` (limited fallback)
+
+## Important Notes
+
+This package requires a RocksDB Python binding. Two options are supported:
+
+1. **python-rocksdb** (Recommended): Full functionality including efficient time-series queries
+2. **rocksdb-python** (Limited fallback): Basic functionality only, no time-series queries
+
+The package will automatically detect which implementation is available and use the appropriate one. Run the RocksDB checker to see what's available on your system.
 
 ## Installation
+
+### Check RocksDB Availability
+
+Before installing, check which RocksDB Python bindings are available:
+
+```bash
+cd python/
+python -m sensor_daemon.check_rocksdb
+```
+
+This will tell you which RocksDB implementation is available and provide installation guidance.
 
 ### From Source
 
@@ -23,8 +44,48 @@ pip install -e .
 
 - Python 3.8+
 - pandas >= 1.3.0
-- python-rocksdb >= 0.8.0
+- python-rocksdb >= 0.8.0 (requires RocksDB C++ library)
 - protobuf >= 3.19.0
+
+### Installing RocksDB Dependencies
+
+The `python-rocksdb` package requires the RocksDB C++ library to be installed on your system.
+
+#### Ubuntu/Debian:
+```bash
+sudo apt-get update
+sudo apt-get install librocksdb-dev python3-dev
+pip install python-rocksdb
+```
+
+#### CentOS/RHEL/Fedora:
+```bash
+# For newer versions with dnf:
+sudo dnf install rocksdb-devel python3-devel
+# For older versions with yum:
+sudo yum install rocksdb-devel python3-devel
+pip install python-rocksdb
+```
+
+#### macOS:
+```bash
+brew install rocksdb
+pip install python-rocksdb
+```
+
+#### Alternative Installation Methods:
+If the above doesn't work, try:
+```bash
+# Using conda (often more reliable):
+conda install python-rocksdb -c conda-forge
+
+# Or install from system packages:
+# Ubuntu/Debian:
+sudo apt-get install python3-rocksdb
+
+# If compilation fails, you may need additional build tools:
+sudo apt-get install build-essential cmake
+```
 
 ## Usage
 

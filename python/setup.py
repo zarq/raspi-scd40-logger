@@ -31,9 +31,15 @@ setup(
     python_requires=">=3.8",
     install_requires=[
         "pandas>=1.3.0",
-        "python-rocksdb>=0.8.0",
         "protobuf>=3.19.0",
     ],
+    extras_require={
+        "full": [
+            "python-rocksdb>=0.8.0",  # Full functionality with time-series queries
+        ],
+        "limited": [
+            "rocksdb-python @ git+https://github.com/gau-nernst/rocksdb-python.git",  # Limited functionality
+        ],
     extras_require={
         "dev": [
             "pytest>=6.0",
