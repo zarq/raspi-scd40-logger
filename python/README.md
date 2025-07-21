@@ -1,37 +1,40 @@
 # Sensor Daemon Python Interface
 
-This Python package provides a convenient interface for querying sensor data collected by the sensor-daemon C++ application. It directly accesses the RocksDB database in read-only mode for efficient data retrieval.
+This Python package provides a convenient interface for querying sensor data collected by the sensor-daemon C++ application. It connects to the daemon's HTTP API for efficient and reliable data retrieval.
 
 ## Features
 
-- **Direct Database Access**: Reads directly from RocksDB without requiring the daemon to be running
+- **HTTP API Access**: Connects to the sensor-daemon's built-in HTTP API (no direct database dependencies)
 - **Pandas Integration**: Returns data as pandas DataFrames for easy analysis
 - **Time-Series Queries**: Support for recent readings, time range queries, and statistical aggregations
 - **Daemon Status Monitoring**: Check if the sensor daemon is currently running
-- **Error Handling**: Comprehensive error handling for database and system issues
-- **Multiple RocksDB Backends**: Supports both `python-rocksdb` (full features) and `rocksdb-python` (limited fallback)
+- **Error Handling**: Comprehensive error handling for network and API issues
+- **No RocksDB Dependencies**: Works with any system that has the sensor-daemon running
 
-## Important Notes
+## Requirements
 
-This package requires a RocksDB Python binding. Two options are supported:
-
-1. **python-rocksdb** (Recommended): Full functionality including efficient time-series queries
-2. **rocksdb-python** (Limited fallback): Basic functionality only, no time-series queries
-
-The package will automatically detect which implementation is available and use the appropriate one. Run the RocksDB checker to see what's available on your system.
+- The sensor-daemon must be running with HTTP API enabled
+- No RocksDB Python bindings required
+- Only standard Python libraries (requests, pandas)
 
 ## Installation
 
-### Check RocksDB Availability
+### Enable HTTP API in sensor-daemon
 
-Before installing, check which RocksDB Python bindings are available:
+Before using this package, ensure the sensor-daemon is configured with HTTP API enabled:
 
-```bash
-cd python/
-python -m sensor_daemon.check_rocksdb
+```toml
+# In /etc/sensor-daemon/sensor-daemon.toml
+[monitoring]
+http_server_enabled = true
+http_server_port = 8080
+http_server_bind_address = "127.0.0.1"
 ```
 
-This will tell you which RocksDB implementation is available and provide installation guidance.
+Restart the daemon after configuration changes:
+```bash
+sudo systemctl restart sensor-daemon
+```
 
 ### From Source
 
@@ -44,48 +47,7 @@ pip install -e .
 
 - Python 3.8+
 - pandas >= 1.3.0
-- python-rocksdb >= 0.8.0 (requires RocksDB C++ library)
-- protobuf >= 3.19.0
-
-### Installing RocksDB Dependencies
-
-The `python-rocksdb` package requires the RocksDB C++ library to be installed on your system.
-
-#### Ubuntu/Debian:
-```bash
-sudo apt-get update
-sudo apt-get install librocksdb-dev python3-dev
-pip install python-rocksdb
-```
-
-#### CentOS/RHEL/Fedora:
-```bash
-# For newer versions with dnf:
-sudo dnf install rocksdb-devel python3-devel
-# For older versions with yum:
-sudo yum install rocksdb-devel python3-devel
-pip install python-rocksdb
-```
-
-#### macOS:
-```bash
-brew install rocksdb
-pip install python-rocksdb
-```
-
-#### Alternative Installation Methods:
-If the above doesn't work, try:
-```bash
-# Using conda (often more reliable):
-conda install python-rocksdb -c conda-forge
-
-# Or install from system packages:
-# Ubuntu/Debian:
-sudo apt-get install python3-rocksdb
-
-# If compilation fails, you may need additional build tools:
-sudo apt-get install build-essential cmake
-```
+- requests >= 2.25.0
 
 ## Usage
 
@@ -94,7 +56,7 @@ sudo apt-get install build-essential cmake
 ```python
 from sensor_daemon import SensorDataReader
 
-# Initialize reader (default path: /var/lib/sensor-daemon/data)
+# Initialize reader (default API URL: http://localhost:8080)
 reader = SensorDataReader()
 
 # Get the last 100 readings
@@ -127,11 +89,11 @@ with SensorDataReader() as reader:
     print(f"Retrieved {len(data)} readings")
 ```
 
-### Custom Database Path
+### Custom API URL
 
 ```python
-# Specify custom database path
-reader = SensorDataReader("/custom/path/to/database")
+# Specify custom API URL (e.g., remote daemon)
+reader = SensorDataReader("http://192.168.1.100:8080")
 ```
 
 ## API Reference
@@ -141,10 +103,11 @@ reader = SensorDataReader("/custom/path/to/database")
 #### Constructor
 
 ```python
-SensorDataReader(db_path="/var/lib/sensor-daemon/data")
+SensorDataReader(api_url="http://localhost:8080", timeout=30)
 ```
 
-- `db_path`: Path to the RocksDB database directory
+- `api_url`: Base URL of the sensor-daemon HTTP API
+- `timeout`: Request timeout in seconds
 
 #### Methods
 

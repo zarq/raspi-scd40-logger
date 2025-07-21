@@ -5,7 +5,7 @@ Command-line interface for sensor-daemon Python package.
 import argparse
 import sys
 from datetime import datetime, timedelta
-from sensor_daemon import SensorDataReader, FULL_IMPLEMENTATION_AVAILABLE
+from sensor_daemon import SensorDataReader
 
 
 def main():
@@ -15,9 +15,9 @@ def main():
     )
     
     parser.add_argument(
-        "--db-path", 
-        default="/var/lib/sensor-daemon/data",
-        help="Path to RocksDB database directory"
+        "--api-url", 
+        default="http://localhost:8080",
+        help="Base URL of the sensor-daemon HTTP API"
     )
     
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
@@ -74,15 +74,8 @@ def main():
         parser.print_help()
         return 1
     
-    # Check implementation capabilities
-    if not FULL_IMPLEMENTATION_AVAILABLE and args.command in ["recent", "range", "aggregate"]:
-        print(f"Error: Command '{args.command}' requires full python-rocksdb implementation", file=sys.stderr)
-        print("Current implementation has limited functionality.", file=sys.stderr)
-        print("Install python-rocksdb for full features.", file=sys.stderr)
-        return 1
-    
     try:
-        with SensorDataReader(args.db_path) as reader:
+        with SensorDataReader(args.api_url) as reader:
             if args.command == "recent":
                 data = reader.get_recent_readings(args.count)
                 print(f"Retrieved {len(data)} recent readings:")

@@ -16,18 +16,12 @@ from sensor_daemon import SensorDataReader
 def main():
     """Demonstrate basic usage of SensorDataReader."""
     
-    # Use default database path or specify custom path
-    db_path = "/var/lib/sensor-daemon/data"
-    
-    # Check if database exists
-    if not os.path.exists(db_path):
-        print(f"Database not found at {db_path}")
-        print("Using example with mock data...")
-        return demonstrate_with_mock_data()
+    # Use default API URL or specify custom URL
+    api_url = "http://localhost:8080"
     
     try:
         # Initialize reader
-        with SensorDataReader(db_path) as reader:
+        with SensorDataReader(api_url) as reader:
             print("=== Sensor Daemon Python Interface Demo ===\n")
             
             # Check daemon status
@@ -40,9 +34,9 @@ def main():
             print("2. Database information...")
             try:
                 info = reader.get_database_info()
-                print(f"   Database path: {info['database_path']}")
-                print(f"   Total records: {info['total_records']}")
-                if info['earliest_timestamp']:
+                print(f"   Total records: {info.get('total_records', 'Unknown')}")
+                print(f"   Implementation: {info.get('implementation', 'HTTP API')}")
+                if info.get('earliest_timestamp'):
                     print(f"   Earliest reading: {info['earliest_timestamp']}")
                     print(f"   Latest reading: {info['latest_timestamp']}")
                 print()
@@ -104,9 +98,10 @@ def main():
             
             print("=== Demo completed successfully ===")
             
-    except FileNotFoundError:
-        print(f"Error: Database not found at {db_path}")
-        print("Make sure the sensor-daemon is installed and has collected some data.")
+    except ConnectionError:
+        print(f"Error: Cannot connect to sensor-daemon API at {api_url}")
+        print("Make sure the sensor-daemon is running with HTTP API enabled.")
+        print("Check configuration: http_server_enabled = true")
         return 1
     except Exception as e:
         print(f"Error: {e}")
