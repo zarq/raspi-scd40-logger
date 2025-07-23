@@ -9,6 +9,8 @@
 #include "health_monitor.hpp"
 #include "scd40_interface.hpp"
 #include "time_series_storage.hpp"
+#include "http_utils.hpp"
+#include "json_response_builder.hpp"
 
 namespace sensor_daemon {
 
@@ -365,6 +367,13 @@ private:
      * @return HTTP response indicating if daemon is alive
      */
     std::string handle_liveness_request() const;
+    
+    /**
+     * Handle recent data request
+     * @param request Full HTTP request string
+     * @return HTTP response with recent sensor readings
+     */
+    std::string handle_recent_data_request(const std::string& request) const;
 };
 
 } // namespace sensor_daemon

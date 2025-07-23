@@ -1763,6 +1763,8 @@ void HealthMonitorServer::server_loop() {
                 response = handle_readiness_request();
             } else if (request.find("GET /alive") != std::string::npos) {
                 response = handle_liveness_request();
+            } else if (request.find("GET /data/recent") != std::string::npos) {
+                response = handle_recent_data_request(request);
             } else {
                 // Not found - provide endpoint list
                 response = "HTTP/1.1 404 Not Found\r\n";
@@ -1775,7 +1777,8 @@ void HealthMonitorServer::server_loop() {
                 response += "    \"/metrics - Detailed metrics\",\n";
                 response += "    \"/diagnostic - Comprehensive diagnostics\",\n";
                 response += "    \"/ready - Readiness probe\",\n";
-                response += "    \"/alive - Liveness probe\"\n";
+                response += "    \"/alive - Liveness probe\",\n";
+                response += "    \"/data/recent?count=N - Recent sensor readings\"\n";
                 response += "  ]\n";
                 response += "}\n";
             }
@@ -1900,6 +1903,60 @@ std::string HealthMonitorServer::handle_liveness_request() const {
     response += json.str();
     
     return response;
+}
+
+std::string HealthMonitorServer::handle_recent_data_request(const std::string& request) const {
+    try {
+        // Check if storage is available
+        if (!storage_) {
+            return JsonResponseBuilder::create_error_response(
+                HttpStatus::SERVICE_UNAVAILABLE,
+                "Storage not available",
+                "Time series storage is not configured or unavailable"
+            );
+        }
+        
+        // Check if storage is healthy
+        if (!storage_->is_healthy()) {
+            return JsonResponseBuilder::create_error_response(
+                HttpStatus::SERVICE_UNAVAILABLE,
+                "Storage unhealthy",
+                "Time series storage reports unhealthy status"
+            );
+        }
+        
+        // Parse query parameters
+        QueryParameters params = QueryParameters::parse_url_parameters(request);
+        
+        // Get count parameter (default to 100)
+        int count = 100;
+        if (params.count.has_value()) {
+            if (!params.is_count_valid()) {
+                return JsonResponseBuilder::create_error_response(
+                    HttpStatus::BAD_REQUEST,
+                    "Invalid count parameter",
+                    "Count must be a positive integer between 1 and 10000"
+                );
+            }
+            count = params.count.value();
+        }
+        
+        // Query recent readings from storage
+        std::vector<SensorData> readings = storage_->get_recent_readings(count);
+        
+        // Generate JSON response
+        return JsonResponseBuilder::create_readings_response(readings);
+        
+    } catch (const std::exception& e) {
+        // Log error and return internal server error
+        std::cerr << "Exception in handle_recent_data_request: " << e.what() << std::endl;
+        
+        return JsonResponseBuilder::create_error_response(
+            HttpStatus::INTERNAL_SERVER_ERROR,
+            "Internal server error",
+            "An unexpected error occurred while processing the request"
+        );
+    }
 }
 
 } // namespace sensor_daemon
