@@ -68,7 +68,9 @@
   - Commit changes to git with message "Implement /data/recent endpoint"
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5_
 
-- [-] 6. Implement /data/range endpoint
+- [x] 6. Implement /data/range endpoint
+
+
 
   - Add handle_range_data_request method to HealthMonitorServer
   - Parse start and end timestamp parameters from query string
@@ -78,6 +80,7 @@
   - Write integration tests for various time range scenarios
   - Do not run any build tools, scripts, or test tools locally
   - Commit changes to git with message "Implement /data/range endpoint"
+
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5_
 
 - [ ] 7. Implement /data/info endpoint

@@ -1767,6 +1767,8 @@ void HealthMonitorServer::server_loop() {
                 response = handle_recent_data_request(request);
             } else if (request.find("GET /data/range") != std::string::npos) {
                 response = handle_range_data_request(request);
+            } else if (request.find("GET /data/info") != std::string::npos) {
+                response = handle_data_info_request(request);
             } else {
                 // Not found - provide endpoint list
                 response = "HTTP/1.1 404 Not Found\r\n";
@@ -1781,7 +1783,8 @@ void HealthMonitorServer::server_loop() {
                 response += "    \"/ready - Readiness probe\",\n";
                 response += "    \"/alive - Liveness probe\",\n";
                 response += "    \"/data/recent?count=N - Recent sensor readings\",\n";
-                response += "    \"/data/range?start=TIME&end=TIME - Sensor readings in time range\"\n";
+                response += "    \"/data/range?start=TIME&end=TIME - Sensor readings in time range\",\n";
+                response += "    \"/data/info - Database information and statistics\"\n";
                 response += "  ]\n";
                 response += "}\n";
             }
@@ -2122,6 +2125,35 @@ std::string HealthMonitorServer::handle_range_data_request(const std::string& re
             HttpStatus::INTERNAL_SERVER_ERROR,
             "Internal server error",
             "An unexpected error occurred while processing the request"
+        );
+    }
+}
+
+std::string HealthMonitorServer::handle_data_info_request(const std::string& request) const {
+    try {
+        // Check if storage is available
+        if (!storage_) {
+            return JsonResponseBuilder::create_error_response(
+                HttpStatus::SERVICE_UNAVAILABLE,
+                "Storage not available",
+                "Time series storage is not configured or unavailable"
+            );
+        }
+        
+        // Get database information from storage
+        TimeSeriesStorage::DatabaseInfo info = storage_->get_database_info();
+        
+        // Generate JSON response
+        return JsonResponseBuilder::create_info_response(info);
+        
+    } catch (const std::exception& e) {
+        // Log error and return internal server error
+        std::cerr << "Exception in handle_data_info_request: " << e.what() << std::endl;
+        
+        return JsonResponseBuilder::create_error_response(
+            HttpStatus::INTERNAL_SERVER_ERROR,
+            "Internal server error",
+            "An unexpected error occurred while retrieving database information"
         );
     }
 }

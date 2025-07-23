@@ -383,11 +383,11 @@ private:
     std::string handle_range_data_request(const std::string& request) const;
     
     /**
-     * Handle range data request
+     * Handle data info request
      * @param request Full HTTP request string
-     * @return HTTP response with sensor readings in time range
+     * @return HTTP response with database information
      */
-    std::string handle_range_data_request(const std::string& request) const;
+    std::string handle_data_info_request(const std::string& request) const;
 };
 
 } // namespace sensor_daemon
