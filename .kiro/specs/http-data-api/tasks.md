@@ -54,6 +54,8 @@
   - _Requirements: 1.1, 1.5, 2.1, 4.1, 5.1, 5.2_
 
 
+
+
 - [ ] 5. Implement /data/recent endpoint
   - Add handle_recent_data_request method to HealthMonitorServer
   - Parse count parameter with default value of 100
@@ -61,11 +63,13 @@
   - Generate JSON response with readings array and total count
   - Add proper error handling for invalid parameters and database errors
   - Write integration tests for the complete endpoint functionality
+
   - Do not run any build tools, scripts, or test tools locally
   - Commit changes to git with message "Implement /data/recent endpoint"
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5_
 
-- [ ] 6. Implement /data/range endpoint
+- [-] 6. Implement /data/range endpoint
+
   - Add handle_range_data_request method to HealthMonitorServer
   - Parse start and end timestamp parameters from query string
   - Validate time range parameters and handle parsing errors

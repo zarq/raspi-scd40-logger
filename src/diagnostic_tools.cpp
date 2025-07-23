@@ -1765,6 +1765,8 @@ void HealthMonitorServer::server_loop() {
                 response = handle_liveness_request();
             } else if (request.find("GET /data/recent") != std::string::npos) {
                 response = handle_recent_data_request(request);
+            } else if (request.find("GET /data/range") != std::string::npos) {
+                response = handle_range_data_request(request);
             } else {
                 // Not found - provide endpoint list
                 response = "HTTP/1.1 404 Not Found\r\n";
@@ -1778,7 +1780,8 @@ void HealthMonitorServer::server_loop() {
                 response += "    \"/diagnostic - Comprehensive diagnostics\",\n";
                 response += "    \"/ready - Readiness probe\",\n";
                 response += "    \"/alive - Liveness probe\",\n";
-                response += "    \"/data/recent?count=N - Recent sensor readings\"\n";
+                response += "    \"/data/recent?count=N - Recent sensor readings\",\n";
+                response += "    \"/data/range?start=TIME&end=TIME - Sensor readings in time range\"\n";
                 response += "  ]\n";
                 response += "}\n";
             }
@@ -1950,6 +1953,170 @@ std::string HealthMonitorServer::handle_recent_data_request(const std::string& r
     } catch (const std::exception& e) {
         // Log error and return internal server error
         std::cerr << "Exception in handle_recent_data_request: " << e.what() << std::endl;
+        
+        return JsonResponseBuilder::create_error_response(
+            HttpStatus::INTERNAL_SERVER_ERROR,
+            "Internal server error",
+            "An unexpected error occurred while processing the request"
+        );
+    }
+}
+
+std::string HealthMonitorServer::handle_range_data_request(const std::string& request) const {
+    try {
+        // Check if storage is available
+        if (!storage_) {
+            return JsonResponseBuilder::create_error_response(
+                HttpStatus::SERVICE_UNAVAILABLE,
+                "Storage not available",
+                "Time series storage is not configured or unavailable"
+            );
+        }
+        
+        // Check if storage is healthy
+        if (!storage_->is_healthy()) {
+            return JsonResponseBuilder::create_error_response(
+                HttpStatus::SERVICE_UNAVAILABLE,
+                "Storage unhealthy",
+                "Time series storage reports unhealthy status"
+            );
+        }
+        
+        // Parse query parameters
+        QueryParameters params = QueryParameters::parse_url_parameters(request);
+        
+        // Validate required parameters
+        if (!params.start_time.has_value() || !params.end_time.has_value()) {
+            return JsonResponseBuilder::create_error_response(
+                HttpStatus::BAD_REQUEST,
+                "Missing required parameters",
+                "Both 'start' and 'end' parameters are required for range queries"
+            );
+        }
+        
+        // Validate time range
+        if (!params.is_time_range_valid()) {
+            return JsonResponseBuilder::create_error_response(
+                HttpStatus::BAD_REQUEST,
+                "Invalid time range",
+                "Start and end times must be valid ISO 8601 timestamps with start <= end"
+            );
+        }
+        
+        // Parse timestamps
+        auto start_time = params.parse_iso8601(params.start_time.value());
+        auto end_time = params.parse_iso8601(params.end_time.value());
+        
+        if (!start_time.has_value() || !end_time.has_value()) {
+            return JsonResponseBuilder::create_error_response(
+                HttpStatus::BAD_REQUEST,
+                "Invalid timestamp format",
+                "Timestamps must be in ISO 8601 format (YYYY-MM-DDTHH:MM:SSZ)"
+            );
+        }
+        
+        // Query readings from storage
+        std::vector<SensorData> readings = storage_->get_readings_in_range(
+            start_time.value(), 
+            end_time.value()
+        );
+        
+        // Generate JSON response
+        return JsonResponseBuilder::create_range_response(
+            readings, 
+            params.start_time.value(), 
+            params.end_time.value()
+        );
+        
+    } catch (const std::exception& e) {
+        // Log error and return internal server error
+        std::cerr << "Exception in handle_range_data_request: " << e.what() << std::endl;
+        
+        return JsonResponseBuilder::create_error_response(
+            HttpStatus::INTERNAL_SERVER_ERROR,
+            "Internal server error",
+            "An unexpected error occurred while processing the request"
+        );
+    }
+}
+
+std::string HealthMonitorServer::handle_range_data_request(const std::string& request) const {
+    try {
+        // Check if storage is available
+        if (!storage_) {
+            return JsonResponseBuilder::create_error_response(
+                HttpStatus::SERVICE_UNAVAILABLE,
+                "Storage not available",
+                "Time series storage is not configured or unavailable"
+            );
+        }
+        
+        // Check if storage is healthy
+        if (!storage_->is_healthy()) {
+            return JsonResponseBuilder::create_error_response(
+                HttpStatus::SERVICE_UNAVAILABLE,
+                "Storage unhealthy",
+                "Time series storage reports unhealthy status"
+            );
+        }
+        
+        // Parse query parameters
+        QueryParameters params = QueryParameters::parse_url_parameters(request);
+        
+        // Validate required parameters
+        if (!params.start_time.has_value() || !params.end_time.has_value()) {
+            return JsonResponseBuilder::create_error_response(
+                HttpStatus::BAD_REQUEST,
+                "Missing required parameters",
+                "Both 'start' and 'end' parameters are required in ISO 8601 format"
+            );
+        }
+        
+        // Parse timestamps
+        auto start_tp = params.parse_iso8601(params.start_time.value());
+        auto end_tp = params.parse_iso8601(params.end_time.value());
+        
+        if (!start_tp.has_value()) {
+            return JsonResponseBuilder::create_error_response(
+                HttpStatus::BAD_REQUEST,
+                "Invalid start time",
+                "Start time must be in ISO 8601 format (YYYY-MM-DDTHH:MM:SSZ)"
+            );
+        }
+        
+        if (!end_tp.has_value()) {
+            return JsonResponseBuilder::create_error_response(
+                HttpStatus::BAD_REQUEST,
+                "Invalid end time",
+                "End time must be in ISO 8601 format (YYYY-MM-DDTHH:MM:SSZ)"
+            );
+        }
+        
+        // Validate time range
+        if (!params.is_time_range_valid()) {
+            return JsonResponseBuilder::create_error_response(
+                HttpStatus::BAD_REQUEST,
+                "Invalid time range",
+                "Start time must be before end time and range must not exceed 7 days"
+            );
+        }
+        
+        // Query readings from storage
+        std::vector<SensorData> readings = storage_->get_readings_in_range(
+            start_tp.value(), 
+            end_tp.value()
+        );
+        
+        // Generate JSON response
+        return JsonResponseBuilder::create_range_response(
+            readings, 
+            params.start_time.value(), 
+            params.end_time.value()
+        );
+        
+    } catch (const std::exception& e) {
+        // Log error and return internal server error
+        std::cerr << "Exception in handle_range_data_request: " << e.what() << std::endl;
         
         return JsonResponseBuilder::create_error_response(
             HttpStatus::INTERNAL_SERVER_ERROR,

@@ -374,6 +374,20 @@ private:
      * @return HTTP response with recent sensor readings
      */
     std::string handle_recent_data_request(const std::string& request) const;
+    
+    /**
+     * Handle range data request
+     * @param request Full HTTP request string
+     * @return HTTP response with sensor readings in time range
+     */
+    std::string handle_range_data_request(const std::string& request) const;
+    
+    /**
+     * Handle range data request
+     * @param request Full HTTP request string
+     * @return HTTP response with sensor readings in time range
+     */
+    std::string handle_range_data_request(const std::string& request) const;
 };
 
 } // namespace sensor_daemon
