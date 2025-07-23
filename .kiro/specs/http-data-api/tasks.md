@@ -13,7 +13,9 @@
   - Commit changes to git with message "Add data query methods to TimeSeriesStorage"
   - _Requirements: 1.1, 1.2, 2.1, 2.2, 4.1, 4.2_
 
-- [-] 2. Extend HealthMonitorServer to accept TimeSeriesStorage
+- [x] 2. Extend HealthMonitorServer to accept TimeSeriesStorage
+
+
 
   - Modify HealthMonitorServer constructor to accept optional TimeSeriesStorage pointer
   - Update DaemonCore initialization to pass storage instance to health server
@@ -24,7 +26,8 @@
   - Commit changes to git with message "Extend HealthMonitorServer to accept TimeSeriesStorage"
   - _Requirements: Integration requirement for data access_
 
-- [ ] 3. Implement HTTP request parameter parsing
+- [-] 3. Implement HTTP request parameter parsing
+
   - Create QueryParameters struct to hold parsed URL parameters
   - Implement parse_url_parameters function to extract query string parameters
   - Add ISO 8601 timestamp parsing with proper error handling
