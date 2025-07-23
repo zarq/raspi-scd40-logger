@@ -11,6 +11,7 @@
 #include "time_series_storage.hpp"
 #include "http_utils.hpp"
 #include "json_response_builder.hpp"
+#include "data_aggregator.hpp"
 
 namespace sensor_daemon {
 
@@ -388,6 +389,13 @@ private:
      * @return HTTP response with database information
      */
     std::string handle_data_info_request(const std::string& request) const;
+    
+    /**
+     * Handle aggregates request
+     * @param request Full HTTP request string
+     * @return HTTP response with aggregated sensor data
+     */
+    std::string handle_aggregates_request(const std::string& request) const;
 };
 
 } // namespace sensor_daemon

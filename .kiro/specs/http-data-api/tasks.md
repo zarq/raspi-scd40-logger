@@ -96,7 +96,9 @@
   - Commit changes to git with message "Implement /data/info endpoint"
   - _Requirements: 4.1, 4.2, 4.3, 4.4_
 
-- [-] 8. Add data aggregation functionality
+- [x] 8. Add data aggregation functionality
+
+
 
   - Create AggregateData struct to hold statistical summaries
   - Implement DataAggregator class with interval-based aggregation logic
@@ -108,7 +110,8 @@
   - Commit changes to git with message "Add data aggregation functionality"
   - _Requirements: 3.1, 3.2, 3.3_
 
-- [ ] 9. Implement /data/aggregates endpoint
+- [-] 9. Implement /data/aggregates endpoint
+
   - Add handle_aggregates_request method to HealthMonitorServer
   - Parse start, end, and interval parameters from query string
   - Retrieve raw data using get_readings_in_range method
