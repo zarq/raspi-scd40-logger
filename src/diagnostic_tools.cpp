@@ -1599,6 +1599,14 @@ HealthMonitorServer::HealthMonitorServer(HealthMonitor* health_monitor, TimeSeri
     security_config.enable_request_logging = true;
     
     security_manager_ = std::make_unique<SecurityManager>(security_config);
+    
+    // Initialize query performance monitor
+    query_monitor_ = std::make_unique<QueryPerformanceMonitor>();
+    
+    // Warm up storage cache if available
+    if (storage_) {
+        storage_->warm_cache({10, 50, 100, 500});
+    }
 }
 
 HealthMonitorServer::~HealthMonitorServer() {
@@ -1925,9 +1933,13 @@ std::string HealthMonitorServer::handle_liveness_request() const {
 }
 
 std::string HealthMonitorServer::handle_recent_data_request(const std::string& request) const {
+    // Start performance monitoring
+    auto timer = query_monitor_->start_query("recent_data_endpoint");
+    
     try {
         // Check if storage is available
         if (!storage_) {
+            timer.mark_failed();
             return JsonResponseBuilder::create_error_response(
                 HttpStatus::SERVICE_UNAVAILABLE,
                 "Storage not available",
@@ -1937,6 +1949,7 @@ std::string HealthMonitorServer::handle_recent_data_request(const std::string& r
         
         // Check if storage is healthy
         if (!storage_->is_healthy()) {
+            timer.mark_failed();
             return JsonResponseBuilder::create_error_response(
                 HttpStatus::SERVICE_UNAVAILABLE,
                 "Storage unhealthy",
@@ -1951,6 +1964,7 @@ std::string HealthMonitorServer::handle_recent_data_request(const std::string& r
         int count = 100;
         if (params.count.has_value()) {
             if (!params.is_count_valid()) {
+                timer.mark_failed();
                 return JsonResponseBuilder::create_error_response(
                     HttpStatus::BAD_REQUEST,
                     "Invalid count parameter",
@@ -1960,15 +1974,27 @@ std::string HealthMonitorServer::handle_recent_data_request(const std::string& r
             count = params.count.value();
         }
         
-        // Query recent readings from storage
+        // Query recent readings from storage (with caching)
         std::vector<SensorData> readings = storage_->get_recent_readings(count);
+        
+        // Log performance metrics for large queries
+        if (count > 1000) {
+            LOG_INFO("Large recent data query processed", {
+                {"count", std::to_string(count)},
+                {"results", std::to_string(readings.size())},
+                {"cache_hit_ratio", std::to_string(storage_->get_cache_metrics().get_hit_ratio())}
+            });
+        }
         
         // Generate JSON response
         return JsonResponseBuilder::create_readings_response(readings);
         
     } catch (const std::exception& e) {
         // Log error and return internal server error
-        std::cerr << "Exception in handle_recent_data_request: " << e.what() << std::endl;
+        timer.mark_failed();
+        LOG_ERROR("Exception in handle_recent_data_request", {
+            {"error", e.what()}
+        });
         
         return JsonResponseBuilder::create_error_response(
             HttpStatus::INTERNAL_SERVER_ERROR,
@@ -1979,9 +2005,13 @@ std::string HealthMonitorServer::handle_recent_data_request(const std::string& r
 }
 
 std::string HealthMonitorServer::handle_range_data_request(const std::string& request) const {
+    // Start performance monitoring
+    auto timer = query_monitor_->start_query("range_data_endpoint");
+    
     try {
         // Check if storage is available
         if (!storage_) {
+            timer.mark_failed();
             return JsonResponseBuilder::create_error_response(
                 HttpStatus::SERVICE_UNAVAILABLE,
                 "Storage not available",
@@ -1991,6 +2021,7 @@ std::string HealthMonitorServer::handle_range_data_request(const std::string& re
         
         // Check if storage is healthy
         if (!storage_->is_healthy()) {
+            timer.mark_failed();
             return JsonResponseBuilder::create_error_response(
                 HttpStatus::SERVICE_UNAVAILABLE,
                 "Storage unhealthy",
@@ -2003,6 +2034,7 @@ std::string HealthMonitorServer::handle_range_data_request(const std::string& re
         
         // Validate required parameters
         if (!params.start_time.has_value() || !params.end_time.has_value()) {
+            timer.mark_failed();
             return JsonResponseBuilder::create_error_response(
                 HttpStatus::BAD_REQUEST,
                 "Missing required parameters",
@@ -2015,6 +2047,7 @@ std::string HealthMonitorServer::handle_range_data_request(const std::string& re
         auto end_tp = params.parse_iso8601(params.end_time.value());
         
         if (!start_tp.has_value()) {
+            timer.mark_failed();
             return JsonResponseBuilder::create_error_response(
                 HttpStatus::BAD_REQUEST,
                 "Invalid start time",
@@ -2023,6 +2056,7 @@ std::string HealthMonitorServer::handle_range_data_request(const std::string& re
         }
         
         if (!end_tp.has_value()) {
+            timer.mark_failed();
             return JsonResponseBuilder::create_error_response(
                 HttpStatus::BAD_REQUEST,
                 "Invalid end time",
@@ -2032,6 +2066,7 @@ std::string HealthMonitorServer::handle_range_data_request(const std::string& re
         
         // Validate time range
         if (!params.is_time_range_valid()) {
+            timer.mark_failed();
             return JsonResponseBuilder::create_error_response(
                 HttpStatus::BAD_REQUEST,
                 "Invalid time range",
@@ -2039,11 +2074,34 @@ std::string HealthMonitorServer::handle_range_data_request(const std::string& re
             );
         }
         
-        // Query readings from storage
+        // Check if this is a large query that should use streaming
+        auto duration = end_tp.value() - start_tp.value();
+        auto duration_hours = std::chrono::duration_cast<std::chrono::hours>(duration).count();
+        
+        if (duration_hours > 24) {
+            // For queries > 24 hours, suggest streaming endpoint
+            LOG_INFO("Large range query detected, consider using streaming", {
+                {"duration_hours", std::to_string(duration_hours)},
+                {"start_time", params.start_time.value()},
+                {"end_time", params.end_time.value()}
+            });
+        }
+        
+        // Query readings from storage with optimized memory usage
         std::vector<SensorData> readings = storage_->get_readings_in_range(
             start_tp.value(), 
             end_tp.value()
         );
+        
+        // Log performance metrics for large queries
+        if (readings.size() > 5000) {
+            auto perf_metrics = storage_->get_performance_metrics();
+            LOG_INFO("Large range query processed", {
+                {"results", std::to_string(readings.size())},
+                {"duration_hours", std::to_string(duration_hours)},
+                {"avg_query_time_ms", std::to_string(perf_metrics.get_average_duration_ms())}
+            });
+        }
         
         // Generate JSON response
         return JsonResponseBuilder::create_range_response(
@@ -2054,7 +2112,10 @@ std::string HealthMonitorServer::handle_range_data_request(const std::string& re
         
     } catch (const std::exception& e) {
         // Log error and return internal server error
-        std::cerr << "Exception in handle_range_data_request: " << e.what() << std::endl;
+        timer.mark_failed();
+        LOG_ERROR("Exception in handle_range_data_request", {
+            {"error", e.what()}
+        });
         
         return JsonResponseBuilder::create_error_response(
             HttpStatus::INTERNAL_SERVER_ERROR,
@@ -2271,6 +2332,10 @@ std::string HealthMonitorServer::route_request(const std::string& request, const
         return handle_data_info_request(request);
     } else if (path == "/data/aggregates") {
         return handle_aggregates_request(request);
+    } else if (path == "/performance") {
+        return handle_performance_metrics_request();
+    } else if (path == "/data/stream/range") {
+        return handle_streaming_request(request, "range");
     } else {
         // Enhanced 404 response with better error information
         ErrorDetails details(ErrorCodes::ENDPOINT_NOT_FOUND, "Requested endpoint not found");
@@ -2336,6 +2401,17 @@ std::string HealthMonitorServer::route_request(const std::string& request, const
         json << "      \"path\": \"/data/info\",\n";
         json << "      \"method\": \"GET\",\n";
         json << "      \"description\": \"Database information and statistics\"\n";
+        json << "    },\n";
+        json << "    {\n";
+        json << "      \"path\": \"/performance\",\n";
+        json << "      \"method\": \"GET\",\n";
+        json << "      \"description\": \"Server and storage performance metrics\"\n";
+        json << "    },\n";
+        json << "    {\n";
+        json << "      \"path\": \"/data/stream/range\",\n";
+        json << "      \"method\": \"GET\",\n";
+        json << "      \"description\": \"Streaming range queries for large result sets\",\n";
+        json << "      \"parameters\": \"?start=TIME&end=TIME (required, ISO 8601 format)\"\n";
         json << "    }\n";
         json << "  ],\n";
         json << "  \"timestamp\": \"" << JsonResponseBuilder::get_current_timestamp() << "\",\n";
@@ -2359,6 +2435,186 @@ std::string HealthMonitorServer::extract_client_ip(int client_fd) const {
     }
     
     return "unknown";
+}
+
+std::string HealthMonitorServer::handle_performance_metrics_request() const {
+    try {
+        std::string response = "HTTP/1.1 200 OK\r\n";
+        response += "Content-Type: application/json\r\n";
+        response += "Connection: close\r\n\r\n";
+        
+        std::ostringstream json;
+        json << "{\n";
+        json << "  \"server_metrics\": {\n";
+        
+        // Get overall query metrics
+        auto overall_metrics = query_monitor_->get_overall_metrics();
+        json << "    \"total_queries\": " << overall_metrics.total_queries.load() << ",\n";
+        json << "    \"average_response_time_ms\": " << overall_metrics.get_average_duration_ms() << ",\n";
+        json << "    \"slow_query_ratio\": " << overall_metrics.get_slow_query_ratio() << ",\n";
+        json << "    \"failed_queries\": " << overall_metrics.failed_queries.load() << ",\n";
+        json << "    \"cached_queries\": " << overall_metrics.cached_queries.load() << "\n";
+        json << "  }";
+        
+        // Add storage metrics if available
+        if (storage_) {
+            auto storage_metrics = storage_->get_performance_metrics();
+            auto cache_metrics = storage_->get_cache_metrics();
+            
+            json << ",\n  \"storage_metrics\": {\n";
+            json << "    \"total_queries\": " << storage_metrics.total_queries.load() << ",\n";
+            json << "    \"average_query_time_ms\": " << storage_metrics.get_average_duration_ms() << ",\n";
+            json << "    \"slow_queries\": " << storage_metrics.slow_queries.load() << ",\n";
+            json << "    \"cache_hit_ratio\": " << cache_metrics.get_hit_ratio() << ",\n";
+            json << "    \"cache_hits\": " << cache_metrics.hits.load() << ",\n";
+            json << "    \"cache_misses\": " << cache_metrics.misses.load() << ",\n";
+            json << "    \"cache_evictions\": " << cache_metrics.evictions.load() << "\n";
+            json << "  }";
+        }
+        
+        json << ",\n  \"timestamp\": " << std::chrono::duration_cast<std::chrono::seconds>(
+            std::chrono::system_clock::now().time_since_epoch()).count() << "\n";
+        json << "}\n";
+        
+        response += json.str();
+        return response;
+        
+    } catch (const std::exception& e) {
+        LOG_ERROR("Exception in handle_performance_metrics_request", {
+            {"error", e.what()}
+        });
+        
+        return JsonResponseBuilder::create_error_response(
+            HttpStatus::INTERNAL_SERVER_ERROR,
+            "Internal server error",
+            "Failed to retrieve performance metrics"
+        );
+    }
+}
+
+std::string HealthMonitorServer::handle_streaming_request(const std::string& request, const std::string& query_type) const {
+    // Start performance monitoring
+    auto timer = query_monitor_->start_query("streaming_" + query_type);
+    
+    try {
+        // Check if storage is available
+        if (!storage_) {
+            timer.mark_failed();
+            return JsonResponseBuilder::create_error_response(
+                HttpStatus::SERVICE_UNAVAILABLE,
+                "Storage not available",
+                "Time series storage is not configured or unavailable"
+            );
+        }
+        
+        // Parse query parameters
+        QueryParameters params = QueryParameters::parse_url_parameters(request);
+        
+        // Validate required parameters for range streaming
+        if (query_type == "range") {
+            if (!params.start_time.has_value() || !params.end_time.has_value()) {
+                timer.mark_failed();
+                return JsonResponseBuilder::create_error_response(
+                    HttpStatus::BAD_REQUEST,
+                    "Missing required parameters",
+                    "Both 'start' and 'end' parameters are required for streaming"
+                );
+            }
+            
+            auto start_tp = params.parse_iso8601(params.start_time.value());
+            auto end_tp = params.parse_iso8601(params.end_time.value());
+            
+            if (!start_tp.has_value() || !end_tp.has_value()) {
+                timer.mark_failed();
+                return JsonResponseBuilder::create_error_response(
+                    HttpStatus::BAD_REQUEST,
+                    "Invalid timestamp format",
+                    "Timestamps must be in ISO 8601 format"
+                );
+            }
+            
+            // Use streaming for large result sets
+            std::ostringstream response_stream;
+            response_stream << "HTTP/1.1 200 OK\r\n";
+            response_stream << "Content-Type: application/json\r\n";
+            response_stream << "Connection: close\r\n\r\n";
+            
+            // Start JSON response
+            response_stream << "{\"readings\":[";
+            
+            bool first_batch = true;
+            size_t total_processed = 0;
+            
+            // Stream data in batches
+            total_processed = storage_->stream_readings_in_range(
+                start_tp.value(),
+                end_tp.value(),
+                [&response_stream, &first_batch](const std::vector<SensorData>& batch) -> bool {
+                    for (const auto& reading : batch) {
+                        if (!first_batch) {
+                            response_stream << ",";
+                        }
+                        first_batch = false;
+                        
+                        // Serialize reading to JSON (simplified)
+                        response_stream << "{";
+                        response_stream << "\"timestamp\":\"" << SensorDataConverter::format_timestamp(reading.timestamp) << "\",";
+                        if (reading.co2_ppm.has_value()) {
+                            response_stream << "\"co2_ppm\":" << reading.co2_ppm.value() << ",";
+                        }
+                        if (reading.temperature_c.has_value()) {
+                            response_stream << "\"temperature_c\":" << reading.temperature_c.value() << ",";
+                        }
+                        if (reading.humidity_percent.has_value()) {
+                            response_stream << "\"humidity_percent\":" << reading.humidity_percent.value() << ",";
+                        }
+                        response_stream << "\"quality_flags\":" << reading.quality_flags;
+                        response_stream << "}";
+                    }
+                    return true; // Continue streaming
+                },
+                1000, // Batch size
+                50000 // Max results
+            );
+            
+            // Close JSON array and add metadata
+            response_stream << "],";
+            response_stream << "\"total_results\":" << total_processed << ",";
+            response_stream << "\"query_type\":\"streaming_range\",";
+            response_stream << "\"start_time\":\"" << params.start_time.value() << "\",";
+            response_stream << "\"end_time\":\"" << params.end_time.value() << "\"";
+            response_stream << "}";
+            
+            LOG_INFO("Streaming query completed", {
+                {"query_type", query_type},
+                {"total_results", std::to_string(total_processed)},
+                {"start_time", params.start_time.value()},
+                {"end_time", params.end_time.value()}
+            });
+            
+            return response_stream.str();
+        }
+        
+        timer.mark_failed();
+        return JsonResponseBuilder::create_error_response(
+            HttpStatus::BAD_REQUEST,
+            "Unsupported streaming query type",
+            "Only 'range' streaming is currently supported"
+        );
+        
+    } catch (const std::exception& e) {
+        timer.mark_failed();
+        LOG_ERROR("Exception in handle_streaming_request", {
+            {"query_type", query_type},
+            {"error", e.what()}
+        });
+        
+        return JsonResponseBuilder::create_error_response(
+            HttpStatus::INTERNAL_SERVER_ERROR,
+            "Internal server error",
+            "An unexpected error occurred during streaming"
+        );
+    }
 }
 
 } // namespace sensor_daemon

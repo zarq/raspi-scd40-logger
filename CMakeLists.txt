@@ -84,6 +84,7 @@ set(DAEMON_SOURCES
     src/daemon_core.cpp
     src/health_monitor.cpp
     src/diagnostic_tools.cpp
+    src/performance_cache.cpp
 )
 
 add_executable(sensor-daemon ${DAEMON_SOURCES})
@@ -124,6 +125,7 @@ set(DIAGNOSTIC_SOURCES
     src/logging_system.cpp
     src/health_monitor.cpp
     src/diagnostic_tools.cpp
+    src/performance_cache.cpp
 )
 
 add_executable(sensor-daemon-diagnostic ${DIAGNOSTIC_SOURCES})

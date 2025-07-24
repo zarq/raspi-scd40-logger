@@ -153,7 +153,9 @@
   - Commit changes to git with message "Implement security and performance measures"
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 7.1, 7.2, 7.4, 7.5_
 
-- [-] 12. Update server request routing
+- [x] 12. Update server request routing
+
+
 
 
 
@@ -170,6 +172,10 @@
   - _Requirements: All endpoint requirements integrated_
 
 - [ ] 13. Add performance optimizations and caching
+
+
+
+
   - Implement caching for frequently requested recent readings
   - Add efficient RocksDB iterator usage for range queries
   - Optimize memory usage during large query processing

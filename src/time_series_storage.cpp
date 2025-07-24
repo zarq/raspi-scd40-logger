@@ -7,6 +7,8 @@
 #include <rocksdb/filter_policy.h>
 #include <rocksdb/table.h>
 #include <rocksdb/cache.h>
+#include <functional>
+#include "logging_system.hpp"
 
 namespace sensor_daemon {
 
@@ -29,6 +31,9 @@ bool TimeSeriesStorage::initialize(const std::string& data_directory,
                   << ": " << e.what() << std::endl;
         return false;
     }
+    
+    // Initialize performance optimization components
+    initialize_performance_components();
     
     // Check disk space before initializing
     if (!check_disk_space()) {
@@ -262,6 +267,45 @@ void TimeSeriesStorage::log_storage_error(const std::string& operation,
 }
 
 std::vector<SensorData> TimeSeriesStorage::get_recent_readings(int count) const {
+    if (!db_ || count <= 0) {
+        return {};
+    }
+    
+    // Initialize performance components if needed
+    if (!recent_cache_ || !performance_monitor_) {
+        initialize_performance_components();
+    }
+    
+    // Start performance monitoring
+    auto timer = performance_monitor_->start_query("recent_readings");
+    
+    // Perform cache maintenance if needed
+    maintain_cache();
+    
+    // Check cache first
+    auto cached_result = recent_cache_->get_recent_readings(count);
+    if (cached_result.has_value()) {
+        timer.mark_cached();
+        LOG_DEBUG("Recent readings served from cache", {
+            {"count", std::to_string(count)},
+            {"cached_size", std::to_string(cached_result->size())}
+        });
+        return std::move(cached_result.value());
+    }
+    
+    // Cache miss - fetch from database
+    auto readings = get_recent_readings_no_cache(count);
+    
+    // Cache the result for future requests
+    if (!readings.empty()) {
+        std::vector<SensorData> readings_copy = readings; // Copy for caching
+        recent_cache_->cache_recent_readings(count, std::move(readings_copy));
+    }
+    
+    return readings;
+}
+
+std::vector<SensorData> TimeSeriesStorage::get_recent_readings_no_cache(int count) const {
     std::vector<SensorData> readings;
     
     if (!db_ || count <= 0) {
@@ -272,10 +316,14 @@ std::vector<SensorData> TimeSeriesStorage::get_recent_readings(int count) const 
     count = std::min(count, 10000);
     
     try {
-        auto iterator = create_iterator();
+        // Use optimized iterator with prefetching for better performance
+        auto iterator = create_optimized_iterator(count);
         if (!iterator) {
             return readings;
         }
+        
+        // Reserve memory to avoid reallocations
+        readings.reserve(count);
         
         // Start from the end (most recent) and work backwards
         iterator->SeekToLast();
@@ -284,19 +332,22 @@ std::vector<SensorData> TimeSeriesStorage::get_recent_readings(int count) const 
             // Deserialize the value
             auto sensor_data = SensorDataConverter::deserialize(iterator->value().ToString());
             if (sensor_data.has_value()) {
-                readings.push_back(sensor_data.value());
+                readings.push_back(std::move(sensor_data.value()));
             }
             
             iterator->Prev();
         }
         
         if (!iterator->status().ok()) {
-            std::cerr << "Iterator error in get_recent_readings: " 
-                      << iterator->status().ToString() << std::endl;
+            LOG_ERROR("Iterator error in get_recent_readings_no_cache", {
+                {"error", iterator->status().ToString()}
+            });
         }
         
     } catch (const std::exception& e) {
-        std::cerr << "Exception in get_recent_readings: " << e.what() << std::endl;
+        LOG_ERROR("Exception in get_recent_readings_no_cache", {
+            {"error", e.what()}
+        });
     }
     
     return readings;
@@ -307,20 +358,33 @@ std::vector<SensorData> TimeSeriesStorage::get_readings_in_range(
     std::chrono::system_clock::time_point end,
     int max_results) const {
     
-    std::vector<SensorData> readings;
-    
     if (!db_ || start > end) {
-        return readings;
+        return {};
     }
+    
+    // Initialize performance components if needed
+    if (!performance_monitor_) {
+        initialize_performance_components();
+    }
+    
+    // Start performance monitoring
+    auto timer = performance_monitor_->start_query("range_readings");
     
     // Limit results to prevent excessive memory usage
     max_results = std::min(max_results, 50000);
     
+    std::vector<SensorData> readings;
+    
     try {
-        auto iterator = create_iterator();
+        // Use optimized iterator with prefetching
+        auto iterator = create_optimized_iterator(std::min(max_results, 1000));
         if (!iterator) {
+            timer.mark_failed();
             return readings;
         }
+        
+        // Reserve memory to avoid reallocations
+        readings.reserve(std::min(max_results, 1000));
         
         // Create start and end keys
         std::string start_key = timestamp_to_key(start);
@@ -336,22 +400,132 @@ std::vector<SensorData> TimeSeriesStorage::get_readings_in_range(
             // Deserialize the value
             auto sensor_data = SensorDataConverter::deserialize(iterator->value().ToString());
             if (sensor_data.has_value()) {
-                readings.push_back(sensor_data.value());
+                readings.emplace_back(std::move(sensor_data.value()));
             }
             
             iterator->Next();
+            
+            // Periodically check memory usage for very large queries
+            if (readings.size() % 5000 == 0) {
+                // Log progress for large queries
+                LOG_DEBUG("Range query progress", {
+                    {"readings_processed", std::to_string(readings.size())},
+                    {"max_results", std::to_string(max_results)}
+                });
+            }
         }
         
         if (!iterator->status().ok()) {
-            std::cerr << "Iterator error in get_readings_in_range: " 
-                      << iterator->status().ToString() << std::endl;
+            LOG_ERROR("Iterator error in get_readings_in_range", {
+                {"error", iterator->status().ToString()}
+            });
+            timer.mark_failed();
         }
         
     } catch (const std::exception& e) {
-        std::cerr << "Exception in get_readings_in_range: " << e.what() << std::endl;
+        LOG_ERROR("Exception in get_readings_in_range", {
+            {"error", e.what()}
+        });
+        timer.mark_failed();
     }
     
     return readings;
+}
+
+size_t TimeSeriesStorage::stream_readings_in_range(
+    std::chrono::system_clock::time_point start,
+    std::chrono::system_clock::time_point end,
+    std::function<bool(const std::vector<SensorData>&)> callback,
+    size_t batch_size,
+    size_t max_results) const {
+    
+    if (!db_ || start > end || !callback) {
+        return 0;
+    }
+    
+    // Initialize performance components if needed
+    if (!performance_monitor_) {
+        initialize_performance_components();
+    }
+    
+    // Start performance monitoring
+    auto timer = performance_monitor_->start_query("stream_range_readings");
+    
+    size_t total_processed = 0;
+    batch_size = std::min(batch_size, size_t(5000)); // Limit batch size
+    max_results = std::min(max_results, size_t(100000)); // Limit total results
+    
+    try {
+        // Use optimized iterator with prefetching
+        auto iterator = create_optimized_iterator(batch_size);
+        if (!iterator) {
+            timer.mark_failed();
+            return 0;
+        }
+        
+        // Create start and end keys
+        std::string start_key = timestamp_to_key(start);
+        std::string end_key = timestamp_to_key(end);
+        
+        // Seek to start position
+        iterator->Seek(start_key);
+        
+        std::vector<SensorData> batch;
+        batch.reserve(batch_size);
+        
+        while (iterator->Valid() && 
+               iterator->key().ToString() <= end_key && 
+               total_processed < max_results) {
+            
+            // Deserialize the value
+            auto sensor_data = SensorDataConverter::deserialize(iterator->value().ToString());
+            if (sensor_data.has_value()) {
+                batch.emplace_back(std::move(sensor_data.value()));
+            }
+            
+            iterator->Next();
+            
+            // Process batch when full
+            if (batch.size() >= batch_size) {
+                if (!callback(batch)) {
+                    // Callback requested to stop
+                    break;
+                }
+                total_processed += batch.size();
+                batch.clear();
+                
+                // Log progress for large streams
+                if (total_processed % 10000 == 0) {
+                    LOG_DEBUG("Stream query progress", {
+                        {"readings_processed", std::to_string(total_processed)},
+                        {"max_results", std::to_string(max_results)}
+                    });
+                }
+            }
+        }
+        
+        // Process remaining batch
+        if (!batch.empty()) {
+            if (callback(batch)) {
+                total_processed += batch.size();
+            }
+        }
+        
+        if (!iterator->status().ok()) {
+            LOG_ERROR("Iterator error in stream_readings_in_range", {
+                {"error", iterator->status().ToString()}
+            });
+            timer.mark_failed();
+        }
+        
+    } catch (const std::exception& e) {
+        LOG_ERROR("Exception in stream_readings_in_range", {
+            {"error", e.what()}
+        });
+        timer.mark_failed();
+    }
+    
+    return total_processed;
 }
 
 TimeSeriesStorage::DatabaseInfo TimeSeriesStorage::get_database_info() const {
@@ -439,6 +613,102 @@ std::string TimeSeriesStorage::get_end_key() const {
     // Return key for maximum timestamp
     auto max_time = std::chrono::system_clock::time_point::max();
     return timestamp_to_key(max_time);
+}
+
+QueryPerformanceMonitor::QueryMetrics TimeSeriesStorage::get_performance_metrics() const {
+    if (!performance_monitor_) {
+        initialize_performance_components();
+    }
+    return performance_monitor_->get_overall_metrics();
+}
+
+CacheMetrics TimeSeriesStorage::get_cache_metrics() const {
+    if (!recent_cache_) {
+        initialize_performance_components();
+    }
+    return recent_cache_->get_metrics();
+}
+
+void TimeSeriesStorage::clear_cache() {
+    if (recent_cache_) {
+        recent_cache_->clear();
+        LOG_INFO("Storage cache cleared");
+    }
+}
+
+void TimeSeriesStorage::warm_cache(const std::vector<int>& counts) {
+    if (!recent_cache_) {
+        initialize_performance_components();
+    }
+    
+    LOG_INFO("Warming storage cache", {
+        {"count_values", std::to_string(counts.size())}
+    });
+    
+    for (int count : counts) {
+        try {
+            auto readings = get_recent_readings_no_cache(count);
+            if (!readings.empty()) {
+                recent_cache_->cache_recent_readings(count, std::move(readings));
+                LOG_DEBUG("Cache warmed for count", {
+                    {"count", std::to_string(count)},
+                    {"readings", std::to_string(readings.size())}
+                });
+            }
+        } catch (const std::exception& e) {
+            LOG_WARN("Failed to warm cache for count", {
+                {"count", std::to_string(count)},
+                {"error", e.what()}
+            });
+        }
+    }
+}
+
+void TimeSeriesStorage::initialize_performance_components() const {
+    if (!recent_cache_) {
+        recent_cache_ = std::make_unique<RecentReadingsCache>(
+            10,  // Cache up to 10 different count values
+            std::chrono::seconds(30)  // Cache for 30 seconds
+        );
+    }
+    
+    if (!performance_monitor_) {
+        performance_monitor_ = std::make_unique<QueryPerformanceMonitor>();
+    }
+    
+    last_cache_cleanup_ = std::chrono::steady_clock::now();
+}
+
+void TimeSeriesStorage::maintain_cache() const {
+    auto now = std::chrono::steady_clock::now();
+    if (now - last_cache_cleanup_ >= CACHE_CLEANUP_INTERVAL) {
+        if (recent_cache_) {
+            recent_cache_->cleanup_expired();
+        }
+        last_cache_cleanup_ = now;
+    }
+}
+
+std::unique_ptr<rocksdb::Iterator> TimeSeriesStorage::create_optimized_iterator(size_t prefetch_size) const {
+    if (!db_) {
+        return nullptr;
+    }
+    
+    rocksdb::ReadOptions read_options;
+    read_options.total_order_seek = true;  // Ensure consistent ordering
+    
+    // Enable prefetching for better performance on range scans
+    if (prefetch_size > 0) {
+        // Estimate prefetch size based on expected data size
+        // Each sensor reading is roughly 100-200 bytes serialized
+        size_t estimated_bytes = prefetch_size * 150;
+        read_options.readahead_size = std::min(estimated_bytes, size_t(1024 * 1024)); // Max 1MB
+    }
+    
+    // Use fill cache for frequently accessed data
+    read_options.fill_cache = true;
+    
+    return std::unique_ptr<rocksdb::Iterator>(db_->NewIterator(read_options));
 }
 
 } // namespace sensor_daemon

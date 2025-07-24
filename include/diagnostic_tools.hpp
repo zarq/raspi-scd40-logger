@@ -332,6 +332,7 @@ private:
     HealthMonitor* health_monitor_;
     TimeSeriesStorage* storage_;
     std::unique_ptr<SecurityManager> security_manager_;
+    std::unique_ptr<QueryPerformanceMonitor> query_monitor_;
     bool running_;
     int port_;
     std::string bind_address_;
@@ -423,6 +424,20 @@ private:
      * @return Client IP address string
      */
     std::string extract_client_ip(int client_fd) const;
+    
+    /**
+     * Get server performance metrics
+     * @return JSON response with performance metrics
+     */
+    std::string handle_performance_metrics_request() const;
+    
+    /**
+     * Handle large result set streaming
+     * @param request Full HTTP request string
+     * @param query_type Type of query for streaming
+     * @return HTTP response with streamed data or error
+     */
+    std::string handle_streaming_request(const std::string& request, const std::string& query_type) const;
 };
 
 } // namespace sensor_daemon

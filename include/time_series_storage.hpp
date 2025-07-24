@@ -7,6 +7,7 @@
 #include <rocksdb/options.h>
 #include <rocksdb/utilities/db_ttl.h>
 #include "sensor_data.hpp"
+#include "performance_cache.hpp"
 
 namespace sensor_daemon {
 
@@ -73,14 +74,21 @@ public:
     void cleanup_old_data();
     
     /**
-     * Get recent readings (newest first)
+     * Get recent readings (newest first) with caching
      * @param count Maximum number of readings to retrieve (default: 100)
      * @return Vector of sensor readings in reverse chronological order
      */
     std::vector<SensorData> get_recent_readings(int count = 100) const;
     
     /**
-     * Get readings in time range
+     * Get recent readings without caching (for cache population)
+     * @param count Maximum number of readings to retrieve
+     * @return Vector of sensor readings in reverse chronological order
+     */
+    std::vector<SensorData> get_recent_readings_no_cache(int count) const;
+    
+    /**
+     * Get readings in time range with optimized memory usage
      * @param start Start timestamp (inclusive)
      * @param end End timestamp (inclusive)
      * @param max_results Maximum number of results to prevent memory exhaustion (default: 10000)
@@ -90,6 +98,22 @@ public:
         std::chrono::system_clock::time_point start,
         std::chrono::system_clock::time_point end,
         int max_results = 10000) const;
+    
+    /**
+     * Stream readings in time range for large result sets
+     * @param start Start timestamp (inclusive)
+     * @param end End timestamp (inclusive)
+     * @param callback Function to call for each batch of readings
+     * @param batch_size Number of readings per batch (default: 1000)
+     * @param max_results Maximum total results (default: 50000)
+     * @return Number of readings processed
+     */
+    size_t stream_readings_in_range(
+        std::chrono::system_clock::time_point start,
+        std::chrono::system_clock::time_point end,
+        std::function<bool(const std::vector<SensorData>&)> callback,
+        size_t batch_size = 1000,
+        size_t max_results = 50000) const;
     
     /**
      * Database information structure
@@ -110,10 +134,41 @@ public:
      */
     DatabaseInfo get_database_info() const;
     
+    /**
+     * Get performance metrics for storage operations
+     * @return Query performance metrics
+     */
+    QueryPerformanceMonitor::QueryMetrics get_performance_metrics() const;
+    
+    /**
+     * Get cache metrics
+     * @return Cache performance metrics
+     */
+    CacheMetrics get_cache_metrics() const;
+    
+    /**
+     * Clear performance cache
+     */
+    void clear_cache();
+    
+    /**
+     * Warm up cache with recent readings
+     * @param counts List of count values to pre-cache
+     */
+    void warm_cache(const std::vector<int>& counts = {10, 50, 100, 500});
+    
 private:
     std::unique_ptr<rocksdb::DBWithTTL> db_;
     std::string data_directory_;
     std::chrono::hours retention_hours_;
+    
+    // Performance optimization components
+    mutable std::unique_ptr<RecentReadingsCache> recent_cache_;
+    mutable std::unique_ptr<QueryPerformanceMonitor> performance_monitor_;
+    
+    // Background cache maintenance
+    mutable std::chrono::steady_clock::time_point last_cache_cleanup_;
+    static constexpr std::chrono::minutes CACHE_CLEANUP_INTERVAL{5};
     
     /**
      * Get optimized RocksDB options for time-series data
@@ -179,6 +234,23 @@ private:
      * @param status RocksDB status object with error details
      */
     void log_storage_error(const std::string& operation, const rocksdb::Status& status) const;
+    
+    /**
+     * Initialize performance optimization components
+     */
+    void initialize_performance_components() const;
+    
+    /**
+     * Perform periodic cache maintenance
+     */
+    void maintain_cache() const;
+    
+    /**
+     * Create optimized RocksDB iterator with prefetching
+     * @param prefetch_size Number of keys to prefetch (0 for default)
+     * @return Unique pointer to iterator
+     */
+    std::unique_ptr<rocksdb::Iterator> create_optimized_iterator(size_t prefetch_size = 0) const;
 };
 
 } // namespace sensor_daemon

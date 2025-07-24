@@ -16,6 +16,7 @@ if(GTest_FOUND)
         test_performance.cpp
         test_stress.cpp
         test_data_integrity.cpp
+        test_performance_optimizations.cpp
     )
     
     # Create test executable
@@ -58,6 +59,7 @@ if(GTest_FOUND)
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/daemon_core.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/health_monitor.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/diagnostic_tools.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/performance_cache.cpp
     )
     
     # Register test
