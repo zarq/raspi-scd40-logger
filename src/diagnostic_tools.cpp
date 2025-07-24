@@ -1588,6 +1588,17 @@ bool DiagnosticTools::create_parent_directories(const std::string& file_path) {
 // HealthMonitorServer implementation
 HealthMonitorServer::HealthMonitorServer(HealthMonitor* health_monitor, TimeSeriesStorage* storage)
     : health_monitor_(health_monitor), storage_(storage), running_(false), port_(8080), bind_address_("127.0.0.1") {
+    
+    // Initialize security manager with default configuration
+    SecurityConfig security_config;
+    security_config.rate_limit.requests_per_minute = 60;
+    security_config.rate_limit.requests_per_hour = 1000;
+    security_config.max_query_results = 10000;
+    security_config.query_timeout = std::chrono::seconds(30);
+    security_config.max_request_size = 8192;
+    security_config.enable_request_logging = true;
+    
+    security_manager_ = std::make_unique<SecurityManager>(security_config);
 }
 
 HealthMonitorServer::~HealthMonitorServer() {
@@ -1749,47 +1760,46 @@ void HealthMonitorServer::server_loop() {
             char buffer[1024] = {0};
             read(client_fd, buffer, sizeof(buffer) - 1);
             
+            // Extract client IP for security validation
+            std::string client_ip = extract_client_ip(client_fd);
+            
             // Parse HTTP request
             std::string request(buffer);
-            std::string response;
             
-            if (request.find("GET /health") != std::string::npos) {
-                response = handle_health_request();
-            } else if (request.find("GET /metrics") != std::string::npos) {
-                response = handle_metrics_request();
-            } else if (request.find("GET /diagnostic") != std::string::npos) {
-                response = handle_diagnostic_request();
-            } else if (request.find("GET /ready") != std::string::npos) {
-                response = handle_readiness_request();
-            } else if (request.find("GET /alive") != std::string::npos) {
-                response = handle_liveness_request();
-            } else if (request.find("GET /data/recent") != std::string::npos) {
-                response = handle_recent_data_request(request);
-            } else if (request.find("GET /data/range") != std::string::npos) {
-                response = handle_range_data_request(request);
-            } else if (request.find("GET /data/info") != std::string::npos) {
-                response = handle_data_info_request(request);
-            } else if (request.find("GET /data/aggregates") != std::string::npos) {
-                response = handle_aggregates_request(request);
+            // Start request timing for logging
+            auto request_start_time = std::chrono::steady_clock::now();
+            
+            // Extract method and path for logging
+            auto [method, path] = HttpParameterParser::extract_method_and_path(request);
+            
+            // Process request with security validation and enhanced routing
+            std::string response = process_request_with_security(request, client_ip);
+            
+            // Calculate response time
+            auto request_end_time = std::chrono::steady_clock::now();
+            auto response_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                request_end_time - request_start_time).count();
+            
+            // Log request details with response time
+            bool is_data_endpoint = path.find("/data/") == 0;
+            if (is_data_endpoint) {
+                // Enhanced logging for data endpoints
+                LOG_INFO("Data endpoint request processed", {
+                    {"method", method},
+                    {"path", path},
+                    {"client_ip", client_ip},
+                    {"response_time_ms", std::to_string(response_time_ms)},
+                    {"response_size_bytes", std::to_string(response.length())},
+                    {"status_code", response.substr(9, 3)} // Extract status code from "HTTP/1.1 XXX"
+                });
             } else {
-                // Not found - provide endpoint list
-                response = "HTTP/1.1 404 Not Found\r\n";
-                response += "Content-Type: application/json\r\n";
-                response += "Connection: close\r\n\r\n";
-                response += "{\n";
-                response += "  \"error\": \"Endpoint not found\",\n";
-                response += "  \"available_endpoints\": [\n";
-                response += "    \"/health - Basic health status\",\n";
-                response += "    \"/metrics - Detailed metrics\",\n";
-                response += "    \"/diagnostic - Comprehensive diagnostics\",\n";
-                response += "    \"/ready - Readiness probe\",\n";
-                response += "    \"/alive - Liveness probe\",\n";
-                response += "    \"/data/recent?count=N - Recent sensor readings\",\n";
-                response += "    \"/data/range?start=TIME&end=TIME - Sensor readings in time range\",\n";
-                response += "    \"/data/aggregates?start=TIME&end=TIME&interval=INTERVAL - Aggregated statistics\",\n";
-                response += "    \"/data/info - Database information and statistics\"\n";
-                response += "  ]\n";
-                response += "}\n";
+                // Standard logging for health endpoints
+                LOG_DEBUG("Health endpoint request processed", {
+                    {"method", method},
+                    {"path", path},
+                    {"client_ip", client_ip},
+                    {"response_time_ms", std::to_string(response_time_ms)}
+                });
             }
             
             // Send response
@@ -1959,84 +1969,6 @@ std::string HealthMonitorServer::handle_recent_data_request(const std::string& r
     } catch (const std::exception& e) {
         // Log error and return internal server error
         std::cerr << "Exception in handle_recent_data_request: " << e.what() << std::endl;
-        
-        return JsonResponseBuilder::create_error_response(
-            HttpStatus::INTERNAL_SERVER_ERROR,
-            "Internal server error",
-            "An unexpected error occurred while processing the request"
-        );
-    }
-}
-
-std::string HealthMonitorServer::handle_range_data_request(const std::string& request) const {
-    try {
-        // Check if storage is available
-        if (!storage_) {
-            return JsonResponseBuilder::create_error_response(
-                HttpStatus::SERVICE_UNAVAILABLE,
-                "Storage not available",
-                "Time series storage is not configured or unavailable"
-            );
-        }
-        
-        // Check if storage is healthy
-        if (!storage_->is_healthy()) {
-            return JsonResponseBuilder::create_error_response(
-                HttpStatus::SERVICE_UNAVAILABLE,
-                "Storage unhealthy",
-                "Time series storage reports unhealthy status"
-            );
-        }
-        
-        // Parse query parameters
-        QueryParameters params = QueryParameters::parse_url_parameters(request);
-        
-        // Validate required parameters
-        if (!params.start_time.has_value() || !params.end_time.has_value()) {
-            return JsonResponseBuilder::create_error_response(
-                HttpStatus::BAD_REQUEST,
-                "Missing required parameters",
-                "Both 'start' and 'end' parameters are required for range queries"
-            );
-        }
-        
-        // Validate time range
-        if (!params.is_time_range_valid()) {
-            return JsonResponseBuilder::create_error_response(
-                HttpStatus::BAD_REQUEST,
-                "Invalid time range",
-                "Start and end times must be valid ISO 8601 timestamps with start <= end"
-            );
-        }
-        
-        // Parse timestamps
-        auto start_time = params.parse_iso8601(params.start_time.value());
-        auto end_time = params.parse_iso8601(params.end_time.value());
-        
-        if (!start_time.has_value() || !end_time.has_value()) {
-            return JsonResponseBuilder::create_error_response(
-                HttpStatus::BAD_REQUEST,
-                "Invalid timestamp format",
-                "Timestamps must be in ISO 8601 format (YYYY-MM-DDTHH:MM:SSZ)"
-            );
-        }
-        
-        // Query readings from storage
-        std::vector<SensorData> readings = storage_->get_readings_in_range(
-            start_time.value(), 
-            end_time.value()
-        );
-        
-        // Generate JSON response
-        return JsonResponseBuilder::create_range_response(
-            readings, 
-            params.start_time.value(), 
-            params.end_time.value()
-        );
-        
-    } catch (const std::exception& e) {
-        // Log error and return internal server error
-        std::cerr << "Exception in handle_range_data_request: " << e.what() << std::endl;
         
         return JsonResponseBuilder::create_error_response(
             HttpStatus::INTERNAL_SERVER_ERROR,
@@ -2274,6 +2206,159 @@ std::string HealthMonitorServer::handle_aggregates_request(const std::string& re
             "An unexpected error occurred while processing the aggregation request"
         );
     }
+}
+
+std::string HealthMonitorServer::process_request_with_security(const std::string& request, const std::string& client_ip) {
+    try {
+        // Start performance monitoring
+        auto start_time = security_manager_->start_request_monitoring("request_processing");
+        
+        // Validate request security
+        auto validation_result = security_manager_->validate_request(request, client_ip);
+        if (!validation_result.is_valid) {
+            // Log security violation
+            std::cerr << "Security validation failed for IP " << client_ip 
+                      << ": " << validation_result.error_message << std::endl;
+            
+            // Return appropriate error response
+            if (validation_result.error_category == HttpErrorCategory::RATE_LIMITING) {
+                return HttpErrorHandler::create_rate_limit_error(60);
+            } else {
+                return HttpErrorHandler::create_parameter_error(
+                    "request", "", validation_result.error_details);
+            }
+        }
+        
+        // Extract method and path
+        auto [method, path] = HttpParameterParser::extract_method_and_path(request);
+        
+        // Route the request
+        std::string response = route_request(request, method, path);
+        
+        // End performance monitoring
+        security_manager_->end_request_monitoring("request_processing", start_time);
+        
+        return response;
+        
+    } catch (const std::exception& e) {
+        std::cerr << "Exception in process_request_with_security: " << e.what() << std::endl;
+        return HttpErrorHandler::create_internal_error("request_processing");
+    }
+}
+
+std::string HealthMonitorServer::route_request(const std::string& request, const std::string& method, const std::string& path) {
+    // Only allow GET requests for data endpoints
+    if (method != "GET") {
+        return HttpErrorHandler::create_method_not_allowed_error(method, {"GET"});
+    }
+    
+    // Route to appropriate handler based on path
+    if (path == "/health") {
+        return handle_health_request();
+    } else if (path == "/metrics") {
+        return handle_metrics_request();
+    } else if (path == "/diagnostic") {
+        return handle_diagnostic_request();
+    } else if (path == "/ready") {
+        return handle_readiness_request();
+    } else if (path == "/alive") {
+        return handle_liveness_request();
+    } else if (path == "/data/recent") {
+        return handle_recent_data_request(request);
+    } else if (path == "/data/range") {
+        return handle_range_data_request(request);
+    } else if (path == "/data/info") {
+        return handle_data_info_request(request);
+    } else if (path == "/data/aggregates") {
+        return handle_aggregates_request(request);
+    } else {
+        // Enhanced 404 response with better error information
+        ErrorDetails details(ErrorCodes::ENDPOINT_NOT_FOUND, "Requested endpoint not found");
+        details.with_details("The requested path '" + path + "' is not available")
+               .with_suggestion("Check the available endpoints list below")
+               .with_context("requested_path", path)
+               .with_context("method", method);
+        
+        // Create enhanced 404 response with available endpoints
+        std::ostringstream json;
+        json << "{\n";
+        json << "  \"error\": \"" << details.user_message << "\",\n";
+        json << "  \"error_code\": \"" << details.error_code << "\",\n";
+        json << "  \"details\": \"" << details.technical_details << "\",\n";
+        json << "  \"suggestion\": \"" << details.suggested_action << "\",\n";
+        json << "  \"requested_path\": \"" << path << "\",\n";
+        json << "  \"method\": \"" << method << "\",\n";
+        json << "  \"available_endpoints\": [\n";
+        json << "    {\n";
+        json << "      \"path\": \"/health\",\n";
+        json << "      \"method\": \"GET\",\n";
+        json << "      \"description\": \"Basic health status\"\n";
+        json << "    },\n";
+        json << "    {\n";
+        json << "      \"path\": \"/metrics\",\n";
+        json << "      \"method\": \"GET\",\n";
+        json << "      \"description\": \"Detailed metrics\"\n";
+        json << "    },\n";
+        json << "    {\n";
+        json << "      \"path\": \"/diagnostic\",\n";
+        json << "      \"method\": \"GET\",\n";
+        json << "      \"description\": \"Comprehensive diagnostics\"\n";
+        json << "    },\n";
+        json << "    {\n";
+        json << "      \"path\": \"/ready\",\n";
+        json << "      \"method\": \"GET\",\n";
+        json << "      \"description\": \"Readiness probe\"\n";
+        json << "    },\n";
+        json << "    {\n";
+        json << "      \"path\": \"/alive\",\n";
+        json << "      \"method\": \"GET\",\n";
+        json << "      \"description\": \"Liveness probe\"\n";
+        json << "    },\n";
+        json << "    {\n";
+        json << "      \"path\": \"/data/recent\",\n";
+        json << "      \"method\": \"GET\",\n";
+        json << "      \"description\": \"Recent sensor readings\",\n";
+        json << "      \"parameters\": \"?count=N (optional, default=100)\"\n";
+        json << "    },\n";
+        json << "    {\n";
+        json << "      \"path\": \"/data/range\",\n";
+        json << "      \"method\": \"GET\",\n";
+        json << "      \"description\": \"Sensor readings in time range\",\n";
+        json << "      \"parameters\": \"?start=TIME&end=TIME (required, ISO 8601 format)\"\n";
+        json << "    },\n";
+        json << "    {\n";
+        json << "      \"path\": \"/data/aggregates\",\n";
+        json << "      \"method\": \"GET\",\n";
+        json << "      \"description\": \"Aggregated statistics\",\n";
+        json << "      \"parameters\": \"?start=TIME&end=TIME&interval=INTERVAL (start/end required, interval optional)\"\n";
+        json << "    },\n";
+        json << "    {\n";
+        json << "      \"path\": \"/data/info\",\n";
+        json << "      \"method\": \"GET\",\n";
+        json << "      \"description\": \"Database information and statistics\"\n";
+        json << "    }\n";
+        json << "  ],\n";
+        json << "  \"timestamp\": \"" << JsonResponseBuilder::get_current_timestamp() << "\",\n";
+        json << "  \"status_code\": 404\n";
+        json << "}\n";
+        
+        std::string json_body = json.str();
+        return JsonResponseBuilder::create_http_header(HttpStatus::NOT_FOUND, json_body.length()) + json_body;
+    }
+}
+
+std::string HealthMonitorServer::extract_client_ip(int client_fd) const {
+    struct sockaddr_in client_addr;
+    socklen_t client_len = sizeof(client_addr);
+    
+    if (getpeername(client_fd, (struct sockaddr*)&client_addr, &client_len) == 0) {
+        char ip_str[INET_ADDRSTRLEN];
+        if (inet_ntop(AF_INET, &client_addr.sin_addr, ip_str, INET_ADDRSTRLEN)) {
+            return std::string(ip_str);
+        }
+    }
+    
+    return "unknown";
 }
 
 } // namespace sensor_daemon

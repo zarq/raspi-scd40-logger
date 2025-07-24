@@ -12,6 +12,8 @@
 #include "http_utils.hpp"
 #include "json_response_builder.hpp"
 #include "data_aggregator.hpp"
+#include "http_security.hpp"
+#include "http_error_handler.hpp"
 
 namespace sensor_daemon {
 
@@ -329,6 +331,7 @@ public:
 private:
     HealthMonitor* health_monitor_;
     TimeSeriesStorage* storage_;
+    std::unique_ptr<SecurityManager> security_manager_;
     bool running_;
     int port_;
     std::string bind_address_;
@@ -396,6 +399,30 @@ private:
      * @return HTTP response with aggregated sensor data
      */
     std::string handle_aggregates_request(const std::string& request) const;
+    
+    /**
+     * Process request with security validation and routing
+     * @param request Full HTTP request string
+     * @param client_ip Client IP address
+     * @return HTTP response
+     */
+    std::string process_request_with_security(const std::string& request, const std::string& client_ip);
+    
+    /**
+     * Route request to appropriate handler
+     * @param request Full HTTP request string
+     * @param method HTTP method
+     * @param path Request path
+     * @return HTTP response
+     */
+    std::string route_request(const std::string& request, const std::string& method, const std::string& path);
+    
+    /**
+     * Extract client IP from socket connection
+     * @param client_fd Client socket file descriptor
+     * @return Client IP address string
+     */
+    std::string extract_client_ip(int client_fd) const;
 };
 
 } // namespace sensor_daemon
