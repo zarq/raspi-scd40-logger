@@ -622,7 +622,7 @@ QueryPerformanceMonitor::QueryMetrics TimeSeriesStorage::get_performance_metrics
     return performance_monitor_->get_overall_metrics();
 }
 
-CacheMetrics TimeSeriesStorage::get_cache_metrics() const {
+const CacheMetrics& TimeSeriesStorage::get_cache_metrics() const {
     if (!recent_cache_) {
         initialize_performance_components();
     }
