@@ -2287,7 +2287,7 @@ std::string HealthMonitorServer::handle_streaming_request(const std::string& req
                         
                         // Serialize reading to JSON (simplified)
                         response_stream << "{";
-                        response_stream << "\"timestamp\":\"" << reading.timestamp << "\",";
+                        response_stream << "\"timestamp\":\"" << JsonResponseBuilder::timestamp_to_iso8601(reading.timestamp) << "\",";
                         if (reading.co2_ppm.has_value()) {
                             response_stream << "\"co2_ppm\":" << reading.co2_ppm.value() << ",";
                         }
