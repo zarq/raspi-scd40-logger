@@ -2,6 +2,7 @@
 #include "json_response_builder.hpp"
 #include <chrono>
 #include <vector>
+#include <regex>
 
 using namespace sensor_daemon;
 
@@ -183,6 +184,32 @@ TEST_F(JsonResponseBuilderTest, CreateErrorResponseWithDetails) {
     EXPECT_TRUE(response.find("\"details\": \"Count must be positive\"") != std::string::npos);
 }
 
+// Test integration of get_current_timestamp with error responses
+TEST_F(JsonResponseBuilderTest, ErrorResponseContainsCurrentTimestamp) {
+    auto before = std::chrono::system_clock::now();
+    std::string response = JsonResponseBuilder::create_error_response(500, "Test error");
+    auto after = std::chrono::system_clock::now();
+    
+    // Extract timestamp from response
+    size_t timestamp_pos = response.find("\"timestamp\": \"");
+    EXPECT_NE(timestamp_pos, std::string::npos);
+    
+    size_t start = timestamp_pos + 14; // Length of "\"timestamp\": \""
+    size_t end = response.find("\"", start);
+    EXPECT_NE(end, std::string::npos);
+    
+    std::string timestamp = response.substr(start, end - start);
+    
+    // Verify timestamp format
+    EXPECT_TRUE(std::regex_match(timestamp, std::regex(R"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z)")));
+    
+    // Parse timestamp and verify it's within reasonable bounds
+    auto parsed_time = Iso8601Parser::parse(timestamp);
+    EXPECT_TRUE(parsed_time.has_value());
+    EXPECT_GE(parsed_time.value(), before - std::chrono::seconds(1));
+    EXPECT_LE(parsed_time.value(), after + std::chrono::seconds(1));
+}
+
 TEST_F(JsonResponseBuilderTest, CreateErrorResponseDifferentCodes) {
     std::string response500 = JsonResponseBuilder::create_error_response(500, "Internal error");
     EXPECT_TRUE(response500.find("HTTP/1.1 500 Internal Server Error") != std::string::npos);
@@ -231,6 +258,15 @@ TEST_F(JsonResponseBuilderTest, GetCurrentTimestamp) {
     EXPECT_TRUE(timestamp.find('T') != std::string::npos);
     EXPECT_TRUE(timestamp.back() == 'Z');
     EXPECT_GE(timestamp.length(), 19);
+    
+    // Test that it returns a valid ISO 8601 format
+    // Format should be: YYYY-MM-DDTHH:MM:SSZ or YYYY-MM-DDTHH:MM:SS.sssZ
+    EXPECT_TRUE(std::regex_match(timestamp, std::regex(R"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z)")));
+    
+    // Test that consecutive calls return different timestamps (or at least not fail)
+    std::string timestamp2 = JsonResponseBuilder::get_current_timestamp();
+    EXPECT_GE(timestamp2.length(), 19);
+    EXPECT_TRUE(timestamp2.back() == 'Z');
 }
 
 // Test HTTP header generation
@@ -243,4 +279,36 @@ TEST_F(JsonResponseBuilderTest, HttpHeaderGeneration) {
     EXPECT_TRUE(header.find("Connection: close") != std::string::npos);
     EXPECT_TRUE(header.find("Access-Control-Allow-Origin: *") != std::string::npos);
     EXPECT_TRUE(header.find("\r\n\r\n") != std::string::npos); // Header terminator
+}
+
+TEST_F(JsonResponseBuilderTest, HttpHeaderGenerationNoContentLength) {
+    std::string header = JsonResponseBuilder::create_http_header(404);
+    
+    EXPECT_TRUE(header.find("HTTP/1.1 404 Not Found") != std::string::npos);
+    EXPECT_TRUE(header.find("Content-Type: application/json") != std::string::npos);
+    EXPECT_TRUE(header.find("Connection: close") != std::string::npos);
+    EXPECT_TRUE(header.find("Access-Control-Allow-Origin: *") != std::string::npos);
+    EXPECT_TRUE(header.find("Cache-Control: no-cache") != std::string::npos);
+    EXPECT_TRUE(header.find("\r\n\r\n") != std::string::npos); // Header terminator
+    // Should not contain Content-Length when content_length is 0
+    EXPECT_TRUE(header.find("Content-Length:") == std::string::npos);
+}
+
+TEST_F(JsonResponseBuilderTest, HttpHeaderGenerationDifferentStatusCodes) {
+    // Test various status codes
+    std::string header400 = JsonResponseBuilder::create_http_header(400, 50);
+    EXPECT_TRUE(header400.find("HTTP/1.1 400 Bad Request") != std::string::npos);
+    EXPECT_TRUE(header400.find("Content-Length: 50") != std::string::npos);
+    
+    std::string header429 = JsonResponseBuilder::create_http_header(429, 75);
+    EXPECT_TRUE(header429.find("HTTP/1.1 429 Too Many Requests") != std::string::npos);
+    EXPECT_TRUE(header429.find("Content-Length: 75") != std::string::npos);
+    
+    std::string header500 = JsonResponseBuilder::create_http_header(500, 25);
+    EXPECT_TRUE(header500.find("HTTP/1.1 500 Internal Server Error") != std::string::npos);
+    EXPECT_TRUE(header500.find("Content-Length: 25") != std::string::npos);
+    
+    std::string header503 = JsonResponseBuilder::create_http_header(503, 30);
+    EXPECT_TRUE(header503.find("HTTP/1.1 503 Service Unavailable") != std::string::npos);
+    EXPECT_TRUE(header503.find("Content-Length: 30") != std::string::npos);
 }

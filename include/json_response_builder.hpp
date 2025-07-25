@@ -117,8 +117,7 @@ public:
      * @return Current time in ISO 8601 format
      */
     static std::string get_current_timestamp();
-
-private:
+    
     /**
      * Create HTTP response header
      * @param status_code HTTP status code
@@ -126,6 +125,8 @@ private:
      * @return HTTP response header string
      */
     static std::string create_http_header(int status_code, size_t content_length = 0);
+
+private:
     
     /**
      * Get HTTP status text for status code
