@@ -81,6 +81,135 @@ TEST_F(HttpUtilsTest, ExtractMethodAndPathPost) {
     EXPECT_EQ(path, "/api/submit");
 }
 
+TEST_F(HttpUtilsTest, ExtractMethodAndPathPut) {
+    std::string request = "PUT /api/update HTTP/1.1\r\n";
+    auto [method, path] = HttpParameterParser::extract_method_and_path(request);
+    
+    EXPECT_EQ(method, "PUT");
+    EXPECT_EQ(path, "/api/update");
+}
+
+TEST_F(HttpUtilsTest, ExtractMethodAndPathDelete) {
+    std::string request = "DELETE /api/delete HTTP/1.1\r\n";
+    auto [method, path] = HttpParameterParser::extract_method_and_path(request);
+    
+    EXPECT_EQ(method, "DELETE");
+    EXPECT_EQ(path, "/api/delete");
+}
+
+TEST_F(HttpUtilsTest, ExtractMethodAndPathWithQueryString) {
+    std::string request = "GET /data/recent?count=10&interval=1H HTTP/1.1\r\n";
+    auto [method, path] = HttpParameterParser::extract_method_and_path(request);
+    
+    EXPECT_EQ(method, "GET");
+    EXPECT_EQ(path, "/data/recent"); // Query string should be stripped
+}
+
+TEST_F(HttpUtilsTest, ExtractMethodAndPathRootPath) {
+    std::string request = "GET / HTTP/1.1\r\n";
+    auto [method, path] = HttpParameterParser::extract_method_and_path(request);
+    
+    EXPECT_EQ(method, "GET");
+    EXPECT_EQ(path, "/");
+}
+
+TEST_F(HttpUtilsTest, ExtractMethodAndPathLongPath) {
+    std::string request = "GET /api/v1/data/sensor/temperature/recent HTTP/1.1\r\n";
+    auto [method, path] = HttpParameterParser::extract_method_and_path(request);
+    
+    EXPECT_EQ(method, "GET");
+    EXPECT_EQ(path, "/api/v1/data/sensor/temperature/recent");
+}
+
+TEST_F(HttpUtilsTest, ExtractMethodAndPathWithNewlineOnly) {
+    std::string request = "GET /data/recent HTTP/1.1\n";
+    auto [method, path] = HttpParameterParser::extract_method_and_path(request);
+    
+    EXPECT_EQ(method, "GET");
+    EXPECT_EQ(path, "/data/recent");
+}
+
+TEST_F(HttpUtilsTest, ExtractMethodAndPathNoNewline) {
+    std::string request = "GET /data/recent HTTP/1.1";
+    auto [method, path] = HttpParameterParser::extract_method_and_path(request);
+    
+    EXPECT_EQ(method, "GET");
+    EXPECT_EQ(path, "/data/recent");
+}
+
+// Malformed request tests - should return empty strings
+TEST_F(HttpUtilsTest, ExtractMethodAndPathEmptyRequest) {
+    std::string request = "";
+    auto [method, path] = HttpParameterParser::extract_method_and_path(request);
+    
+    EXPECT_EQ(method, "");
+    EXPECT_EQ(path, "");
+}
+
+TEST_F(HttpUtilsTest, ExtractMethodAndPathOnlyMethod) {
+    std::string request = "GET\r\n";
+    auto [method, path] = HttpParameterParser::extract_method_and_path(request);
+    
+    EXPECT_EQ(method, "");
+    EXPECT_EQ(path, "");
+}
+
+TEST_F(HttpUtilsTest, ExtractMethodAndPathOnlyMethodAndPath) {
+    std::string request = "GET /data\r\n";
+    auto [method, path] = HttpParameterParser::extract_method_and_path(request);
+    
+    EXPECT_EQ(method, "");
+    EXPECT_EQ(path, "");
+}
+
+TEST_F(HttpUtilsTest, ExtractMethodAndPathMissingPath) {
+    std::string request = "GET HTTP/1.1\r\n";
+    auto [method, path] = HttpParameterParser::extract_method_and_path(request);
+    
+    EXPECT_EQ(method, "");
+    EXPECT_EQ(path, "");
+}
+
+TEST_F(HttpUtilsTest, ExtractMethodAndPathInvalidFormat) {
+    std::string request = "INVALID REQUEST FORMAT\r\n";
+    auto [method, path] = HttpParameterParser::extract_method_and_path(request);
+    
+    EXPECT_EQ(method, "");
+    EXPECT_EQ(path, "");
+}
+
+TEST_F(HttpUtilsTest, ExtractMethodAndPathExtraSpaces) {
+    std::string request = "GET  /data/recent  HTTP/1.1\r\n";
+    auto [method, path] = HttpParameterParser::extract_method_and_path(request);
+    
+    EXPECT_EQ(method, "GET");
+    EXPECT_EQ(path, "/data/recent");
+}
+
+TEST_F(HttpUtilsTest, ExtractMethodAndPathLowercaseMethod) {
+    std::string request = "get /data/recent HTTP/1.1\r\n";
+    auto [method, path] = HttpParameterParser::extract_method_and_path(request);
+    
+    EXPECT_EQ(method, "get");
+    EXPECT_EQ(path, "/data/recent");
+}
+
+TEST_F(HttpUtilsTest, ExtractMethodAndPathHttp10) {
+    std::string request = "GET /data/recent HTTP/1.0\r\n";
+    auto [method, path] = HttpParameterParser::extract_method_and_path(request);
+    
+    EXPECT_EQ(method, "GET");
+    EXPECT_EQ(path, "/data/recent");
+}
+
+TEST_F(HttpUtilsTest, ExtractMethodAndPathHttp2) {
+    std::string request = "GET /data/recent HTTP/2.0\r\n";
+    auto [method, path] = HttpParameterParser::extract_method_and_path(request);
+    
+    EXPECT_EQ(method, "GET");
+    EXPECT_EQ(path, "/data/recent");
+}
+
 // QueryParameters tests
 TEST_F(HttpUtilsTest, ParseUrlParametersCount) {
     std::string request = "GET /data/recent?count=50 HTTP/1.1\r\n";
