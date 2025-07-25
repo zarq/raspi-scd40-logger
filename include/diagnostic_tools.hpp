@@ -168,7 +168,7 @@ public:
      * @return Diagnostic result with data quality metrics
      */
     static DiagnosticResult test_sensor_data_quality(
-        const SCD40Interface* sensor_interface, 
+        SCD40Interface* const sensor_interface, 
         int num_samples = 5);
     
     /**

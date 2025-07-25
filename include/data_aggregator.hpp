@@ -83,6 +83,15 @@ private:
         std::chrono::minutes interval_minutes);
     
     /**
+     * Hash function for time_point to use in unordered_map
+     */
+    struct TimePointHash {
+        std::size_t operator()(const std::chrono::system_clock::time_point& tp) const {
+            return std::hash<std::chrono::system_clock::rep>{}(tp.time_since_epoch().count());
+        }
+    };
+
+    /**
      * Group readings by time intervals
      * @param readings Vector of sensor readings (should be sorted by timestamp)
      * @param intervals Vector of interval start times
@@ -94,15 +103,6 @@ private:
         const std::vector<SensorData>& readings,
         const std::vector<std::chrono::system_clock::time_point>& intervals,
         std::chrono::minutes interval_minutes);
-    
-    /**
-     * Hash function for time_point to use in unordered_map
-     */
-    struct TimePointHash {
-        std::size_t operator()(const std::chrono::system_clock::time_point& tp) const {
-            return std::hash<std::chrono::system_clock::rep>{}(tp.time_since_epoch().count());
-        }
-    };
 };
 
 /**

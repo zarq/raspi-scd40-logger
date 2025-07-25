@@ -21,7 +21,21 @@ struct CacheEntry {
     std::atomic<uint64_t> access_count{0};
     
     CacheEntry(T&& d) : data(std::move(d)), timestamp(std::chrono::steady_clock::now()) {}
-    
+
+    CacheEntry(const T& d) : data(d), timestamp(std::chrono::steady_clock::now()) {}
+
+    // Copy constructor
+    CacheEntry(const CacheEntry& other)
+        : data(other.data),
+          timestamp(other.timestamp),
+          access_count(other.access_count.load(std::memory_order_relaxed)) {}
+
+    // Move constructor
+    CacheEntry(CacheEntry&& other) noexcept
+        : data(std::move(other.data)),
+          timestamp(other.timestamp),
+          access_count(other.access_count.load(std::memory_order_relaxed)) {}
+
     bool is_expired(std::chrono::seconds max_age) const {
         auto now = std::chrono::steady_clock::now();
         return (now - timestamp) > max_age;
@@ -40,6 +54,10 @@ struct CacheMetrics {
     std::atomic<uint64_t> misses{0};
     std::atomic<uint64_t> evictions{0};
     std::atomic<uint64_t> total_requests{0};
+
+    CacheMetrics() = default;
+    CacheMetrics(const CacheMetrics&) = delete;
+    CacheMetrics& operator=(const CacheMetrics&) = delete;
     
     double get_hit_ratio() const {
         uint64_t total = total_requests.load(std::memory_order_relaxed);
@@ -137,7 +155,7 @@ public:
      * Get cache metrics
      * @return Current cache metrics
      */
-    CacheMetrics get_metrics() const {
+    const CacheMetrics& get_metrics() const {
         return metrics_;
     }
     
@@ -237,7 +255,7 @@ public:
      * Get cache metrics
      * @return Cache performance metrics
      */
-    CacheMetrics get_metrics() const {
+    const CacheMetrics& get_metrics() const {
         return cache_.get_metrics();
     }
     
@@ -266,26 +284,48 @@ public:
         std::atomic<uint64_t> slow_queries{0};  // Queries > 100ms
         std::atomic<uint64_t> failed_queries{0};
         std::atomic<uint64_t> cached_queries{0};
-        
+
+        QueryMetrics() = default;
+
+        // Move constructor
+        QueryMetrics(QueryMetrics&& other) noexcept {
+            total_queries.store(other.total_queries.load(std::memory_order_relaxed), std::memory_order_relaxed);
+            total_duration_ms.store(other.total_duration_ms.load(std::memory_order_relaxed), std::memory_order_relaxed);
+            slow_queries.store(other.slow_queries.load(std::memory_order_relaxed), std::memory_order_relaxed);
+            failed_queries.store(other.failed_queries.load(std::memory_order_relaxed), std::memory_order_relaxed);
+            cached_queries.store(other.cached_queries.load(std::memory_order_relaxed), std::memory_order_relaxed);
+        }
+
+        // Move assignment operator
+        QueryMetrics& operator=(QueryMetrics&& other) noexcept {
+            if (this != &other) {
+                total_queries.store(other.total_queries.load(std::memory_order_relaxed), std::memory_order_relaxed);
+                total_duration_ms.store(other.total_duration_ms.load(std::memory_order_relaxed), std::memory_order_relaxed);
+                slow_queries.store(other.slow_queries.load(std::memory_order_relaxed), std::memory_order_relaxed);
+                failed_queries.store(other.failed_queries.load(std::memory_order_relaxed), std::memory_order_relaxed);
+                cached_queries.store(other.cached_queries.load(std::memory_order_relaxed), std::memory_order_relaxed);
+            }
+            return *this;
+        }
+
         double get_average_duration_ms() const {
             uint64_t total = total_queries.load(std::memory_order_relaxed);
             if (total == 0) return 0.0;
             return static_cast<double>(total_duration_ms.load(std::memory_order_relaxed)) / total;
         }
-        
+
         double get_slow_query_ratio() const {
             uint64_t total = total_queries.load(std::memory_order_relaxed);
             if (total == 0) return 0.0;
             return static_cast<double>(slow_queries.load(std::memory_order_relaxed)) / total;
         }
-        
+
         double get_cache_hit_ratio() const {
             uint64_t total = total_queries.load(std::memory_order_relaxed);
             if (total == 0) return 0.0;
             return static_cast<double>(cached_queries.load(std::memory_order_relaxed)) / total;
         }
     };
-    
     /**
      * RAII timer for measuring query performance
      */
@@ -295,13 +335,7 @@ public:
             : monitor_(monitor), query_type_(query_type), 
               start_time_(std::chrono::steady_clock::now()) {}
         
-        ~QueryTimer() {
-            auto end_time = std::chrono::steady_clock::now();
-            auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
-                end_time - start_time_).count();
-            
-            monitor_.record_query(query_type_, duration, false, false);
-        }
+        ~QueryTimer();
         
         void mark_cached() {
             cached_ = true;
@@ -339,7 +373,13 @@ public:
         std::lock_guard<std::mutex> lock(mutex_);
         auto it = metrics_.find(query_type);
         if (it != metrics_.end()) {
-            return it->second;
+            QueryMetrics result;
+            result.total_queries = it->second.total_queries.load(std::memory_order_relaxed);
+            result.total_duration_ms = it->second.total_duration_ms.load(std::memory_order_relaxed);
+            result.slow_queries = it->second.slow_queries.load(std::memory_order_relaxed);
+            result.failed_queries = it->second.failed_queries.load(std::memory_order_relaxed);
+            result.cached_queries = it->second.cached_queries.load(std::memory_order_relaxed);
+            return result;
         }
         return QueryMetrics{};
     }
@@ -384,25 +424,7 @@ private:
      * @param cached Whether query was served from cache
      * @param failed Whether query failed
      */
-    void record_query(const std::string& query_type, uint64_t duration_ms, bool cached, bool failed) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        
-        auto& metrics = metrics_[query_type];
-        metrics.total_queries.fetch_add(1, std::memory_order_relaxed);
-        metrics.total_duration_ms.fetch_add(duration_ms, std::memory_order_relaxed);
-        
-        if (duration_ms > SLOW_QUERY_THRESHOLD_MS) {
-            metrics.slow_queries.fetch_add(1, std::memory_order_relaxed);
-        }
-        
-        if (cached) {
-            metrics.cached_queries.fetch_add(1, std::memory_order_relaxed);
-        }
-        
-        if (failed) {
-            metrics.failed_queries.fetch_add(1, std::memory_order_relaxed);
-        }
-    }
+    void record_query(const std::string& query_type, uint64_t duration_ms, bool cached, bool failed);
     
     friend class QueryTimer;
 };

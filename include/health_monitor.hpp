@@ -9,6 +9,8 @@
 #include <vector>
 #include <functional>
 #include "logging_system.hpp"
+#include "scd40_interface.hpp"
+#include "time_series_storage.hpp"
 
 namespace sensor_daemon {
 
@@ -236,7 +238,8 @@ private:
      * Clean up old health events
      */
     void cleanup_old_events();
-    
+
+public:
     /**
      * Convert health status to string
      * @param status Health status enum

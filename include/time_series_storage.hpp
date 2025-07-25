@@ -144,7 +144,7 @@ public:
      * Get cache metrics
      * @return Cache performance metrics
      */
-    CacheMetrics get_cache_metrics() const;
+    const CacheMetrics& get_cache_metrics() const;
     
     /**
      * Clear performance cache
@@ -212,19 +212,6 @@ private:
     /**
      * Check if there's sufficient disk space for operations
      * @return true if disk space is adequate
-     */
-    bool check_disk_space() const;
-    
-    /**
-     * Log storage-related errors with context
-     * @param operation Description of the operation that failed
-     * @param status RocksDB status containing error information
-     */
-    void log_storage_error(const std::string& operation, const rocksdb::Status& status) const;
-    
-    /**
-     * Check available disk space and return true if sufficient
-     * @return true if disk space is adequate, false if running low
      */
     bool check_disk_space() const;
     

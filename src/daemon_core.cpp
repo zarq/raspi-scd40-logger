@@ -572,20 +572,20 @@ bool DaemonCore::initialize_health_monitoring() {
         
         // Register built-in health checks
         health_monitor_->register_health_check("memory", 
-            [this]() { return health_checks::check_memory_usage(alert_config.max_memory_mb); });
-        
+            [alert_config]() { return health_checks::check_memory_usage(alert_config.max_memory_mb); });
+
         health_monitor_->register_health_check("cpu",
-            [this]() { return health_checks::check_cpu_usage(alert_config.max_cpu_percent); });
-        
+            [alert_config]() { return health_checks::check_cpu_usage(alert_config.max_cpu_percent); });
+
         health_monitor_->register_health_check("disk",
-            [this]() { return health_checks::check_disk_space(config_.storage.data_directory, 100.0); });
-        
+            [data_directory = config_.storage.data_directory]() { return health_checks::check_disk_space(data_directory, 100.0); });
+
         health_monitor_->register_health_check("sensor",
-            [this]() { return health_checks::check_sensor_health(sensor_interface_.get(), 
+            [sensor_interface = sensor_interface_.get(), alert_config]() { return health_checks::check_sensor_health(sensor_interface, 
                                                               alert_config.min_sensor_success_rate); });
-        
+
         health_monitor_->register_health_check("storage",
-            [this]() { return health_checks::check_storage_health(storage_.get(), 
+            [storage = storage_.get(), alert_config]() { return health_checks::check_storage_health(storage, 
                                                                alert_config.min_storage_success_rate); });
         
         // Create health endpoint for external monitoring
