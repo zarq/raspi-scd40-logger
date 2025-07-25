@@ -85,6 +85,11 @@ set(DAEMON_SOURCES
     src/health_monitor.cpp
     src/diagnostic_tools.cpp
     src/performance_cache.cpp
+    src/json_response_builder.cpp
+    src/http_utils.cpp
+    src/http_security.cpp
+    src/http_error_handler.cpp
+    src/data_aggregator.cpp
 )
 
 add_executable(sensor-daemon ${DAEMON_SOURCES})
@@ -126,6 +131,11 @@ set(DIAGNOSTIC_SOURCES
     src/health_monitor.cpp
     src/diagnostic_tools.cpp
     src/performance_cache.cpp
+    src/json_response_builder.cpp
+    src/http_utils.cpp
+    src/http_security.cpp
+    src/http_error_handler.cpp
+    src/data_aggregator.cpp
 )
 
 add_executable(sensor-daemon-diagnostic ${DIAGNOSTIC_SOURCES})
