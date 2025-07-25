@@ -335,13 +335,7 @@ public:
             : monitor_(monitor), query_type_(query_type), 
               start_time_(std::chrono::steady_clock::now()) {}
         
-        ~QueryTimer() {
-            auto end_time = std::chrono::steady_clock::now();
-            auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
-                end_time - start_time_).count();
-            
-            monitor_.record_query(query_type_, duration, false, false);
-        }
+        ~QueryTimer();
         
         void mark_cached() {
             cached_ = true;
@@ -430,25 +424,7 @@ private:
      * @param cached Whether query was served from cache
      * @param failed Whether query failed
      */
-    void record_query(const std::string& query_type, uint64_t duration_ms, bool cached, bool failed) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        
-        auto& metrics = metrics_[query_type];
-        metrics.total_queries.fetch_add(1, std::memory_order_relaxed);
-        metrics.total_duration_ms.fetch_add(duration_ms, std::memory_order_relaxed);
-        
-        if (duration_ms > SLOW_QUERY_THRESHOLD_MS) {
-            metrics.slow_queries.fetch_add(1, std::memory_order_relaxed);
-        }
-        
-        if (cached) {
-            metrics.cached_queries.fetch_add(1, std::memory_order_relaxed);
-        }
-        
-        if (failed) {
-            metrics.failed_queries.fetch_add(1, std::memory_order_relaxed);
-        }
-    }
+    void record_query(const std::string& query_type, uint64_t duration_ms, bool cached, bool failed);
     
     friend class QueryTimer;
 };

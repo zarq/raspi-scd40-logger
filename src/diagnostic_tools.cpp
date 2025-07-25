@@ -1132,7 +1132,7 @@ DiagnosticResult DiagnosticTools::test_storage_query_performance(const TimeSerie
             performance_acceptable = false;
         }
         
-        if (agg_duration.count() > 200) {
+        if (range_duration.count() > 200) {
             result.add_detail("WARNING: Aggregation query exceeds 200ms target");
             performance_acceptable = false;
         }
@@ -2188,7 +2188,7 @@ std::string HealthMonitorServer::handle_performance_metrics_request() const {
         // Add storage metrics if available
         if (storage_) {
             auto storage_metrics = storage_->get_performance_metrics();
-            auto cache_metrics = storage_->get_cache_metrics();
+            const auto& cache_metrics = storage_->get_cache_metrics();
             
             json << ",\n  \"storage_metrics\": {\n";
             json << "    \"total_queries\": " << storage_metrics.total_queries.load() << ",\n";
@@ -2287,7 +2287,7 @@ std::string HealthMonitorServer::handle_streaming_request(const std::string& req
                         
                         // Serialize reading to JSON (simplified)
                         response_stream << "{";
-                        response_stream << "\"timestamp\":\"" << SensorDataConverter::format_timestamp(reading.timestamp) << "\",";
+                        response_stream << "\"timestamp\":\"" << reading.timestamp << "\",";
                         if (reading.co2_ppm.has_value()) {
                             response_stream << "\"co2_ppm\":" << reading.co2_ppm.value() << ",";
                         }

@@ -5,7 +5,11 @@
 			"type": "shell",
 			"label": "CMake Build",
 			"command": "cmake --build build",
-			"group": "build"
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
+			"problemMatcher": []
 		}
 	]
 }
