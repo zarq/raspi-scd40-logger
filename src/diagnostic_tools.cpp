@@ -684,181 +684,6 @@ DiagnosticResult DiagnosticTools::test_i2c_bus(const std::string& i2c_device) {
     return result;
 }
 
-DiagnosticResult DiagnosticTools::test_sensor_data_quality(const SCD40Interface* sensor_interface, int num_samples) {
-    DiagnosticResult result("Sensor Data Quality");
-    
-    auto start_time = std::chrono::steady_clock::now();
-    
-    try {
-        if (!sensor_interface) {
-            result.message = "Sensor interface not available";
-            result.passed = false;
-            result.duration = std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::steady_clock::now() - start_time);
-            return result;
-        }
-        
-        if (!sensor_interface->is_connected()) {
-            result.message = "Sensor not connected";
-            result.passed = false;
-            result.duration = std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::steady_clock::now() - start_time);
-            return result;
-        }
-        
-        std::vector<SensorReading> readings;
-        int successful_readings = 0;
-        
-        // Collect samples
-        for (int i = 0; i < num_samples; ++i) {
-            try {
-                SensorReading reading = sensor_interface->read_sensor();
-                readings.push_back(reading);
-                
-                if (reading.co2_ppm.has_value() || reading.temperature_c.has_value() || reading.humidity_percent.has_value()) {
-                    successful_readings++;
-                }
-                
-                // Small delay between readings
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                
-            } catch (const std::exception& e) {
-                result.add_detail("Reading " + std::to_string(i + 1) + " failed: " + e.what());
-            }
-        }
-        
-        result.add_detail("Successful readings: " + std::to_string(successful_readings) + "/" + std::to_string(num_samples));
-        
-        if (successful_readings == 0) {
-            result.message = "No successful sensor readings obtained";
-            result.passed = false;
-        } else {
-            // Analyze data quality
-            std::vector<float> co2_values, temp_values, humidity_values;
-            
-            for (const auto& reading : readings) {
-                if (reading.co2_ppm.has_value()) {
-                    co2_values.push_back(reading.co2_ppm.value());
-                }
-                if (reading.temperature_c.has_value()) {
-                    temp_values.push_back(reading.temperature_c.value());
-                }
-                if (reading.humidity_percent.has_value()) {
-                    humidity_values.push_back(reading.humidity_percent.value());
-                }
-            }
-            
-            // Check CO2 values
-            if (!co2_values.empty()) {
-                auto [min_co2, max_co2] = std::minmax_element(co2_values.begin(), co2_values.end());
-                float avg_co2 = std::accumulate(co2_values.begin(), co2_values.end(), 0.0f) / co2_values.size();
-                
-                result.add_detail("CO2 range: " + std::to_string(*min_co2) + " - " + std::to_string(*max_co2) + " ppm");
-                result.add_detail("CO2 average: " + std::to_string(avg_co2) + " ppm");
-                
-                // Check for reasonable CO2 values (outdoor: ~400ppm, indoor: 400-1000ppm)
-                if (*min_co2 < 300 || *max_co2 > 5000) {
-                    result.add_detail("Warning: CO2 values outside expected range (300-5000 ppm)");
-                }
-            }
-            
-            // Check temperature values
-            if (!temp_values.empty()) {
-                auto [min_temp, max_temp] = std::minmax_element(temp_values.begin(), temp_values.end());
-                float avg_temp = std::accumulate(temp_values.begin(), temp_values.end(), 0.0f) / temp_values.size();
-                
-                result.add_detail("Temperature range: " + std::to_string(*min_temp) + " - " + std::to_string(*max_temp) + " °C");
-                result.add_detail("Temperature average: " + std::to_string(avg_temp) + " °C");
-                
-                // Check for reasonable temperature values
-                if (*min_temp < -40 || *max_temp > 70) {
-                    result.add_detail("Warning: Temperature values outside sensor range (-40 to 70°C)");
-                }
-            }
-            
-            // Check humidity values
-            if (!humidity_values.empty()) {
-                auto [min_hum, max_hum] = std::minmax_element(humidity_values.begin(), humidity_values.end());
-                float avg_hum = std::accumulate(humidity_values.begin(), humidity_values.end(), 0.0f) / humidity_values.size();
-                
-                result.add_detail("Humidity range: " + std::to_string(*min_hum) + " - " + std::to_string(*max_hum) + " %");
-                result.add_detail("Humidity average: " + std::to_string(avg_hum) + " %");
-                
-                // Check for reasonable humidity values
-                if (*min_hum < 0 || *max_hum > 100) {
-                    result.add_detail("Warning: Humidity values outside valid range (0-100%)");
-                }
-            }
-            
-            double success_rate = static_cast<double>(successful_readings) / num_samples;
-            if (success_rate >= 0.8) {
-                result.passed = true;
-                result.message = "Sensor data quality good (" + std::to_string(static_cast<int>(success_rate * 100)) + "% success rate)";
-            } else {
-                result.passed = false;
-                result.message = "Poor sensor data quality (" + std::to_string(static_cast<int>(success_rate * 100)) + "% success rate)";
-            }
-        }
-        
-    } catch (const std::exception& e) {
-        result.message = "Exception during sensor data quality test: " + std::string(e.what());
-        result.passed = false;
-    }
-    
-    result.duration = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::steady_clock::now() - start_time);
-    
-    return result;
-}
-
-DiagnosticResult DiagnosticTools::test_storage_query_performance(const TimeSeriesStorage* storage) {
-    DiagnosticResult result("Storage Query Performance");
-    
-    auto start_time = std::chrono::steady_clock::now();
-    
-    try {
-        if (!storage) {
-            result.message = "Storage engine not available";
-            result.passed = false;
-            result.duration = std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::steady_clock::now() - start_time);
-            return result;
-        }
-        
-        if (!storage->is_healthy()) {
-            result.message = "Storage engine reports unhealthy status";
-            result.passed = false;
-            result.duration = std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::steady_clock::now() - start_time);
-            return result;
-        }
-        
-        // Test basic storage metrics
-        uint64_t db_size = storage->get_database_size();
-        result.add_detail("Database size: " + std::to_string(db_size / 1024.0 / 1024.0) + " MB");
-        
-        // Performance requirements from design document:
-        // - Query response time < 10ms for recent data
-        // - Memory usage < 10MB
-        
-        if (db_size > 100 * 1024 * 1024) { // 100MB
-            result.add_detail("Large database size may affect query performance");
-        }
-        
-        result.passed = true;
-        result.message = "Storage engine appears healthy and ready for queries";
-        
-    } catch (const std::exception& e) {
-        result.message = "Exception during storage performance test: " + std::string(e.what());
-        result.passed = false;
-    }
-    
-    result.duration = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::steady_clock::now() - start_time);
-    
-    return result;
-}
-
 std::vector<std::string> DiagnosticTools::generate_troubleshooting_recommendations(const DiagnosticReport& report) {
     std::vector<std::string> recommendations;
     
@@ -914,11 +739,16 @@ bool DiagnosticTools::is_process_running(const std::string& process_name) {
     return system(command.c_str()) == 0;
 }
 
-// DiagnosticCLI implementation
 int DiagnosticCLI::run(int argc, char* argv[]) {
-    if (argc > 1 && (std::string(argv[1]) == "--help" || std::string(argv[1]) == "-h")) {
-        print_usage();
-        return 0;
+    std::string test_name;
+    std::vector<std::string> args;
+    
+    if (!parse_arguments(argc, argv, test_name, args)) {
+        return 0; // Help was displayed
+    }
+    
+    if (!test_name.empty()) {
+        return run_specific_test(test_name, args);
     }
     
     std::cout << "Sensor Daemon Diagnostic Tool\n";
@@ -997,38 +827,6 @@ std::vector<std::string> DiagnosticCLI::get_available_tests() {
     };
 }
 
-int DiagnosticCLI::run(int argc, char* argv[]) {
-    std::string test_name;
-    std::vector<std::string> args;
-    
-    if (!parse_arguments(argc, argv, test_name, args)) {
-        return 0; // Help was displayed
-    }
-    
-    if (!test_name.empty()) {
-        return run_specific_test(test_name, args);
-    }
-    
-    std::cout << "Sensor Daemon Diagnostic Tool\n";
-    std::cout << "==============================\n\n";
-    
-    DiagnosticReport report = DiagnosticTools::run_comprehensive_diagnostics();
-    
-    std::cout << "\n" << report.get_formatted_report() << std::endl;
-    
-    // Generate recommendations
-    auto recommendations = DiagnosticTools::generate_troubleshooting_recommendations(report);
-    if (!recommendations.empty()) {
-        std::cout << "=== TROUBLESHOOTING RECOMMENDATIONS ===\n";
-        for (const auto& rec : recommendations) {
-            std::cout << "- " << rec << "\n";
-        }
-        std::cout << std::endl;
-    }
-    
-    return report.all_tests_passed() ? 0 : 1;
-}
-
 int DiagnosticCLI::run_specific_test(const std::string& test_name, const std::vector<std::string>& args) {
     std::cout << "Running test: " << test_name << "\n";
     std::cout << "==============================\n\n";
@@ -1091,78 +889,8 @@ int DiagnosticCLI::run_specific_test(const std::string& test_name, const std::ve
 
 // New diagnostic tool methods
 
-DiagnosticResult DiagnosticTools::test_i2c_bus(const std::string& i2c_device) {
-    DiagnosticResult result("I2C Bus Scan");
-    
-    auto start_time = std::chrono::steady_clock::now();
-    
-    try {
-        int file = open(i2c_device.c_str(), O_RDWR);
-        if (file < 0) {
-            result.message = "Failed to open I2C device: " + std::string(strerror(errno));
-            result.passed = false;
-            result.duration = std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::steady_clock::now() - start_time);
-            return result;
-        }
-        
-        result.add_detail("I2C device opened: " + i2c_device);
-        
-        // Scan for devices
-        std::vector<int> detected_addresses;
-        
-        for (int addr = 0x03; addr < 0x78; ++addr) {
-            // Skip reserved addresses
-            if (addr < 0x08 || (addr > 0x37 && addr < 0x40)) {
-                continue;
-            }
-            
-            if (ioctl(file, I2C_SLAVE, addr) < 0) {
-                continue;
-            }
-            
-            // Try to read a byte from the device
-            char buf;
-            if (read(file, &buf, 1) >= 0) {
-                detected_addresses.push_back(addr);
-            }
-        }
-        
-        close(file);
-        
-        if (detected_addresses.empty()) {
-            result.message = "No I2C devices detected";
-            result.passed = false;
-        } else {
-            result.message = "Detected " + std::to_string(detected_addresses.size()) + " I2C devices";
-            result.passed = true;
-            
-            for (int addr : detected_addresses) {
-                std::stringstream ss;
-                ss << "Device at address: 0x" << std::hex << addr;
-                
-                // Add known device names
-                if (addr == 0x62) {
-                    ss << " (SCD40 CO2 sensor)";
-                }
-                
-                result.add_detail(ss.str());
-            }
-        }
-        
-    } catch (const std::exception& e) {
-        result.message = "Exception during I2C bus scan: " + std::string(e.what());
-        result.passed = false;
-    }
-    
-    result.duration = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::steady_clock::now() - start_time);
-    
-    return result;
-}
-
 DiagnosticResult DiagnosticTools::test_sensor_data_quality(
-    const SCD40Interface* sensor_interface, 
+    SCD40Interface* const sensor_interface, 
     int num_samples) {
     
     DiagnosticResult result("Sensor Data Quality");
@@ -1289,7 +1017,7 @@ DiagnosticResult DiagnosticTools::test_sensor_data_quality(
             
             // Check if humidity readings are reasonable
             if (humidity_avg < 0 || humidity_avg > 100) {
-                result.add_detail("WARNING: Humidity average outside expected range (0-100%)");
+                result.add_detail("WARNING: Humidity average outside valid range (0-100%)");
             }
         } else {
             result.add_detail("No valid humidity readings");
@@ -1345,6 +1073,7 @@ DiagnosticResult DiagnosticTools::test_storage_query_performance(const TimeSerie
     try {
         if (!storage) {
             result.message = "Storage engine not available";
+            result.passed = false;
             result.duration = std::chrono::duration_cast<std::chrono::milliseconds>(
                 std::chrono::steady_clock::now() - start_time);
             return result;
