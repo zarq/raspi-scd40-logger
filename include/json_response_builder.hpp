@@ -136,12 +136,15 @@ private:
      */
     static std::string get_status_text(int status_code);
     
+public:
     /**
      * Escape string for JSON
      * @param str String to escape
      * @return JSON-escaped string
      */
     static std::string escape_json_string(const std::string& str);
+
+private:
     
     /**
      * Format double value for JSON (handles NaN, infinity)

@@ -37,7 +37,9 @@
   - As you work on this, you cannot run cmake and/or gcc/g++ directly, since they have to run remotely. After changes have been committed to git, I can provide the output of any commands.
   - _Requirements: 1.1, 1.4_
 
-- [-] 3. Implement missing SecurityManager methods
+- [x] 3. Implement missing SecurityManager methods
+
+
 
 
 
@@ -50,7 +52,10 @@
   - As you work on this, you cannot run cmake and/or gcc/g++ directly, since they have to run remotely. After changes have been committed to git, I can provide the output of any commands.
   - _Requirements: 3.1, 3.2, 3.3, 3.4_
 
-- [ ] 4. Implement missing HttpErrorHandler methods
+- [-] 4. Implement missing HttpErrorHandler methods
+
+
+
   - Add create_rate_limit_error method for rate limiting responses
   - Add create_internal_error method for server error responses
   - Add create_parameter_error method for parameter validation errors
